@@ -19,7 +19,7 @@ from app.deps import Ctx, flash, get_ctx, login_session, logout_session, optiona
 from app.deps import templates as _templates
 
 # One-click demo login on the login page (hidden in production).
-_templates.env.globals["demo_enabled"] = settings.env != "prod"
+_templates.env.globals["demo_enabled"] = settings.demo_enabled
 from app.models import (
     AvailabilityRule,
     AvailabilitySchedule,

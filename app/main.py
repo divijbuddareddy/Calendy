@@ -95,6 +95,14 @@ def _startup_hooks() -> None:
 async def lifespan(app: FastAPI):
     init_db()
     _startup_hooks()
+    if settings.demo_enabled and not IS_TEST:
+        # Idempotent: creates the demo workspace only if demo@example.com doesn't exist yet.
+        try:
+            import seed
+
+            await asyncio.to_thread(seed.main)
+        except Exception:
+            log.exception("demo seed failed")
     stop = asyncio.Event()
     task = None
     if settings.worker_enabled and not IS_TEST:

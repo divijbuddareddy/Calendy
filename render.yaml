@@ -27,6 +27,8 @@ services:
           property: connectionString
       - key: BASE_URL
         sync: false            # set to https://<your-service>.onrender.com or your custom domain
+      - key: DEMO_MODE           # seeds demo@example.com / demo1234 + shows "Try the demo account"; set "false" for a real launch
+        value: "true"
       - key: WORKER_ENABLED
         value: "true"
       - key: EMBED_ALLOWED_ORIGINS

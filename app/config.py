@@ -1,6 +1,7 @@
 """Application settings (env-driven). Copy .env.example to .env to override."""
 import os
 from functools import lru_cache
+from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -70,6 +71,15 @@ class Settings(BaseSettings):
 
     # Observability (optional)
     sentry_dsn: str = ""
+
+    # Demo mode: seeds the demo workspace (demo@example.com / demo1234) at startup if missing and
+    # shows the one-click "Try the demo account" button. Defaults to on outside ENV=prod;
+    # set DEMO_MODE=true to enable it on a public demo deployment.
+    demo_mode: Optional[bool] = None
+
+    @property
+    def demo_enabled(self) -> bool:
+        return self.demo_mode if self.demo_mode is not None else self.env != "prod"
 
 
 def normalize_db_url(url: str) -> str:
