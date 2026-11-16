@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Payments{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Payments</h1>
+    <p class="muted" style="margin:0">Paid bookings, meeting packages, invoices and payment links. Money goes straight to your connected Stripe account (test checkout when none is connected).</p>
+  </div>
+  <a class="btn" href="/app/integrations">Payment accounts</a>
+</div>
+<nav class="tabs" aria-label="Payment sections">
+  <a href="/app/payments" class="{{ 'active' if tab == 'overview' }}">Overview</a>
+  <a href="/app/payments?tab=packages" class="{{ 'active' if tab == 'packages' }}">Packages</a>
+  <a href="/app/payments?tab=invoices" class="{{ 'active' if tab == 'invoices' }}">Invoices</a>
+  <a href="/app/payments?tab=links" class="{{ 'active' if tab == 'links' }}">Payment links</a>
+</nav>
+{% if not enabled %}<div class="alert alert-info">Collecting payments requires the Standard plan or higher. <a href="/app/billing">Upgrade →</a></div>{% endif %}
+
+{% if tab == 'overview' %}
+<div class="grid grid-3">
+  {% for cur, amt in revenue.gross_by_currency.items() %}<div class="card stat"><div class="muted">Booking revenue ({{ cur }})</div><strong style="font-size:1.4rem">{{ amt|money(cur) }}</strong></div>{% endfor %}
+  {% for r in commerce.by_kind %}<div class="card stat"><div class="muted">{{ {'package':'Packages','invoice':'Invoices','link':'Payment links'}[r.kind] }} ({{ r.currency }})</div><strong style="font-size:1.4rem">{{ r.amount_minor|money(r.currency) }}</strong></div>{% endfor %}
+</div>
+<section class="card">
+  <h2>Booking payments</h2>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Date</th><th>Amount</th><th>Provider</th><th>Status</th><th>Booking</th></tr></thead>
+    <tbody>
+    {% for p in records %}
+      <tr><td>{{ p.created_at|dt(user.default_timezone) }}</td><td>{{ p.amount_minor|money(p.currency) }}</td><td>{{ p.provider }}</td>
+        <td><span class="badge {{ 'badge-success' if p.status == 'succeeded' else 'badge-warning' if p.status in ('pending','refund_pending') else '' }}">{{ p.status }}</span></td>
+        <td><a href="/app/scheduled/{{ p.booking_id }}">View</a></td></tr>
+    {% else %}<tr><td colspan="5" class="empty">No booking payments yet.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+<section class="card">
+  <h2>Package, invoice &amp; link payments</h2>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Payer</th><th>Reference</th></tr></thead>
+    <tbody>
+    {% for c in checkouts %}
+      <tr><td>{{ c.completed_at|dt(user.default_timezone) if c.completed_at else '' }}</td><td>{{ c.kind }}</td><td>{{ c.amount_minor|money(c.currency) }}</td><td>{{ c.buyer_email or '—' }}</td><td><code>{{ c.provider_payment_id }}</code></td></tr>
+    {% else %}<tr><td colspan="5" class="empty">No payments yet.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+
+{% elif tab == 'packages' %}
+<div class="grid grid-2">
+  <section class="card">
+    <h2>New package</h2>
+    <p class="muted">Sell a bundle of sessions upfront. Buyers get a code by email and redeem it when booking instead of paying.</p>
+    <form method="post" action="/app/payments/packages">
+      {{ csrf_input(request) }}
+      <div class="field"><label for="pk-et">Event type</label>
+        <select id="pk-et" name="event_type_id" required>{% for e in event_types %}<option value="{{ e.id }}">{{ e.name }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="pk-name">Package name</label><input id="pk-name" name="name" maxlength="200" placeholder="e.g. 5 coaching sessions"></div>
+      <div class="inline-fields">
+        <div class="field"><label for="pk-n">Sessions</label><input id="pk-n" name="sessions" type="number" min="1" max="100" value="5" required></div>
+        <div class="field"><label for="pk-price">Price</label><input id="pk-price" name="price" inputmode="decimal" placeholder="199.00" required></div>
+        <div class="field"><label for="pk-cur">Currency</label><select id="pk-cur" name="currency">{% for c in currencies %}<option>{{ c }}</option>{% endfor %}</select></div>
+      </div>
+      <button class="btn btn-primary" type="submit" {{ 'disabled' if not enabled }}>Create package</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Packages</h2>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Name</th><th>Event type</th><th>Sessions</th><th>Price</th><th>Link</th><th></th></tr></thead>
+      <tbody>
+      {% for p in packages %}
+        <tr><td>{{ p.name }} {% if not p.active %}<span class="badge">Disabled</span>{% endif %}</td><td>{{ et_names.get(p.event_type_id, '') }}</td><td>{{ p.sessions }}</td><td>{{ p.price_minor|money(p.currency) }}</td>
+          <td><button class="btn btn-sm" data-copy="{{ base_url }}/p/package/{{ p.public_token }}">Copy link</button></td>
+          <td><form method="post" action="/app/payments/packages/{{ p.id }}/toggle">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">{{ 'Disable' if p.active else 'Enable' }}</button></form></td></tr>
+      {% else %}<tr><td colspan="6" class="empty">No packages yet.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+</div>
+<section class="card">
+  <h2>Sold packages</h2>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Buyer</th><th>Package</th><th>Used</th><th>Code</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for s in purchases %}
+      <tr><td>{{ s.buyer_name }} &lt;{{ s.buyer_email }}&gt;</td><td>{{ product_names.get(s.product_id, '') }}</td><td>{{ s.sessions_used }} / {{ s.sessions_total }}</td><td><code>…{{ s.code_hint }}</code></td><td><span class="badge {{ 'badge-success' if s.status == 'active' else '' }}">{{ s.status }}</span></td></tr>
+    {% else %}<tr><td colspan="5" class="empty">No packages sold yet.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+
+{% elif tab == 'invoices' %}
+<div class="grid grid-2">
+  <section class="card">
+    <h2>New invoice</h2>
+    <form method="post" action="/app/payments/invoices">
+      {{ csrf_input(request) }}
+      <div class="inline-fields">
+        <div class="field"><label for="iv-name">Client name</label><input id="iv-name" name="recipient_name" maxlength="200"></div>
+        <div class="field"><label for="iv-email">Client email</label><input id="iv-email" name="recipient_email" type="email" required></div>
+      </div>
+      <div class="field"><label for="iv-desc">Notes</label><textarea id="iv-desc" name="description" rows="2"></textarea></div>
+      <fieldset class="field" style="border:0;padding:0"><legend style="font-weight:600;font-size:.88rem">Line items</legend>
+        {% for i in range(3) %}
+        <div class="inline-fields">
+          <input name="item_description" aria-label="Item {{ i + 1 }} description" placeholder="Description" {{ 'required' if i == 0 }}>
+          <input name="item_quantity" aria-label="Item {{ i + 1 }} quantity" type="number" min="1" value="1" style="max-width:80px">
+          <input name="item_amount" aria-label="Item {{ i + 1 }} unit price" inputmode="decimal" placeholder="0.00" style="max-width:120px" {{ 'required' if i == 0 }}>
+        </div>
+        {% endfor %}
+      </fieldset>
+      <div class="inline-fields">
+        <div class="field"><label for="iv-cur">Currency</label><select id="iv-cur" name="currency">{% for c in currencies %}<option>{{ c }}</option>{% endfor %}</select></div>
+        <div class="field"><label for="iv-due">Due date</label><input id="iv-due" name="due_date" type="date"></div>
+      </div>
+      <label class="check"><input type="checkbox" name="send_now" value="1" checked> Email it to the client now</label>
+      <button class="btn btn-primary mt" type="submit" {{ 'disabled' if not enabled }}>Create invoice</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Invoices</h2>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Number</th><th>Client</th><th>Amount</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for v in invoices %}
+        <tr><td><a href="/app/payments/invoices/{{ v.id }}">{{ v.number }}</a></td><td>{{ v.recipient_email }}</td><td>{{ v.amount_minor|money(v.currency) }}</td>
+          <td><span class="badge {{ 'badge-success' if v.status == 'paid' else 'badge-primary' if v.status == 'sent' else 'badge-danger' if v.status == 'void' else '' }}">{{ v.status }}</span></td>
+          <td class="row">
+            {% if v.status in ('draft', 'sent') %}<form method="post" action="/app/payments/invoices/{{ v.id }}/send">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">{{ 'Send' if v.status == 'draft' else 'Resend' }}</button></form>
+            <form method="post" action="/app/payments/invoices/{{ v.id }}/void">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Void invoice {{ v.number }}?">Void</button></form>{% endif %}
+          </td></tr>
+      {% else %}<tr><td colspan="5" class="empty">No invoices yet.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+</div>
+
+{% else %}
+<div class="grid grid-2">
+  <section class="card">
+    <h2>New payment link</h2>
+    <p class="muted">A reusable link that collects a fixed amount through checkout – no booking needed.</p>
+    <form method="post" action="/app/payments/links">
+      {{ csrf_input(request) }}
+      <div class="field"><label for="pl-desc">Description</label><input id="pl-desc" name="description" maxlength="500" required placeholder="e.g. Strategy workshop deposit"></div>
+      <div class="inline-fields">
+        <div class="field"><label for="pl-amt">Amount</label><input id="pl-amt" name="amount" inputmode="decimal" placeholder="50.00" required></div>
+        <div class="field"><label for="pl-cur">Currency</label><select id="pl-cur" name="currency">{% for c in currencies %}<option>{{ c }}</option>{% endfor %}</select></div>
+      </div>
+      <button class="btn btn-primary" type="submit" {{ 'disabled' if not enabled }}>Create link</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Payment links</h2>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Description</th><th>Amount</th><th>Paid</th><th>Link</th><th></th></tr></thead>
+      <tbody>
+      {% for l in links %}
+        <tr><td>{{ l.description }} {% if not l.active %}<span class="badge">Disabled</span>{% endif %}</td><td>{{ l.amount_minor|money(l.currency) }}</td><td>{{ l.paid_count }}</td>
+          <td><button class="btn btn-sm" data-copy="{{ base_url }}/p/link/{{ l.public_token }}">Copy link</button></td>
+          <td><form method="post" action="/app/payments/links/{{ l.id }}/toggle">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">{{ 'Disable' if l.active else 'Enable' }}</button></form></td></tr>
+      {% else %}<tr><td colspan="5" class="empty">No payment links yet.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+</div>
+{% endif %}
+{% endblock %}

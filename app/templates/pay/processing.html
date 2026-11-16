@@ -1,0 +1,24 @@
+{% extends "public_base.html" %}
+{% block title %}Processing payment{% endblock %}
+{% block content %}
+<div class="public-wrap">
+  <div class="booking-card">
+    {% include "pay/_summary.html" %}
+    <div class="booking-main">
+      <h1>Confirming your payment…</h1>
+      <p class="muted">We're waiting for confirmation from the payment provider. This page refreshes automatically.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function poll(){
+  fetch('/pay/{{ booking.manage_token }}/status').then(r=>r.json()).then(d=>{
+    if(d.confirmed_url){ location.href=d.confirmed_url; return; }
+    if(d.record_status==='failed'||d.booking_status==='failed'){ location.href='/pay/{{ booking.manage_token }}'; return; }
+    setTimeout(poll,2500);
+  }).catch(()=>setTimeout(poll,4000));
+})();
+</script>
+{% endblock %}

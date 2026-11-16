@@ -1,0 +1,15 @@
+<div class="page-head">
+  <div>
+    <h1>Admin</h1>
+    <p class="muted">Workspace security, compliance and operations for {{ workspace.name }}.</p>
+  </div>
+</div>
+<nav class="tabs" aria-label="Admin sections">
+  <a href="/app/admin" class="{{ 'active' if tab == 'overview' }}">Security</a>
+  <a href="/app/admin/audit" class="{{ 'active' if tab == 'audit' }}">Audit log</a>
+  <a href="/app/admin/sso" class="{{ 'active' if tab == 'sso' }}">SSO &amp; SCIM</a>
+  <a href="/app/admin/managed-events" class="{{ 'active' if tab == 'managed' }}">Managed events</a>
+  <a href="/app/admin/data-deletion" class="{{ 'active' if tab == 'data' }}">Data deletion</a>
+  <a href="/app/admin/usage" class="{{ 'active' if tab == 'usage' }}">Usage</a>
+  {% if ctx.role == 'owner' or user.is_platform_admin %}<a href="/app/admin/health" class="{{ 'active' if tab == 'health' }}">System health</a>{% endif %}
+</nav>

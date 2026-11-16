@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Teams & members{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Teams &amp; members</h1>
+    <p class="muted">Manage who belongs to {{ workspace.name }}, their roles, and the teams that host shared event types.</p>
+  </div>
+</div>
+<nav class="tabs" aria-label="Team sections">
+  <a href="/app/teams?tab=members" class="{{ 'active' if tab != 'teams' }}">Members ({{ members|length }})</a>
+  <a href="/app/teams?tab=teams" class="{{ 'active' if tab == 'teams' }}">Teams ({{ teams|length }})</a>
+</nav>
+
+{% if tab != 'teams' %}
+  {% if ctx.can('admin') %}
+  <form class="card" method="post" action="/app/teams/invite">
+    {{ csrf_input(request) }}
+    <h2>Invite teammates</h2>
+    <div class="inline-fields">
+      <div style="flex:3">
+        <label for="inv-email">Email addresses</label>
+        <input id="inv-email" type="text" name="email" placeholder="sam@company.com, lee@company.com" required>
+      </div>
+      <div>
+        <label for="inv-role">Role</label>
+        <select id="inv-role" name="role">
+          <option value="member">Member</option>
+          <option value="viewer">Viewer</option>
+          {% if ctx.role == 'owner' %}<option value="admin">Admin</option><option value="owner">Owner</option>{% endif %}
+        </select>
+      </div>
+      <div style="flex:0;align-self:flex-end"><button class="btn btn-primary" type="submit">Send invites</button></div>
+    </div>
+    <p class="help">
+      {% if approved_domains %}Only addresses at <strong>{{ approved_domains|join(', ') }}</strong> can be invited (domain control).
+      {% else %}Invitees receive an email with a secure link to join this workspace.{% endif %}
+    </p>
+  </form>
+  {% endif %}
+
+  <section class="card">
+    <div class="card-head"><h2>Members</h2>
+      <span class="muted">{{ owner_count }} owner{{ 's' if owner_count != 1 }}</span></div>
+    <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Person</th><th>Role</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>
+      {% for m, u in members %}
+        <tr>
+          <td>
+            <strong>{{ u.name if u else (m.invite_email or '—') }}</strong>
+            {% if u and u.id == user.id %}<span class="badge">You</span>{% endif %}<br>
+            <span class="muted">{{ u.email if u else m.invite_email }}</span>
+          </td>
+          <td>
+            {% if ctx.can('admin') and m.status != 'invited' and not (u and u.id == user.id and owner_count <= 1 and m.role == 'owner') %}
+            <form method="post" action="/app/teams/members/{{ m.id }}/role" class="row" style="margin:0">
+              {{ csrf_input(request) }}
+              <label class="sr-only" for="role-{{ m.id }}">Role</label>
+              <select id="role-{{ m.id }}" name="role" style="width:auto" onchange="this.form.submit()"
+                {% if ctx.role != 'owner' and m.role in ('owner','admin') %}disabled{% endif %}>
+                {% for r in roles %}
+                  {% if ctx.role == 'owner' or r in ('member','viewer') or r == m.role %}
+                  <option value="{{ r }}" {{ 'selected' if r == m.role }}>{{ r|capitalize }}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+              <noscript><button class="btn btn-sm" type="submit">Save</button></noscript>
+            </form>
+            {% else %}
+              <span class="badge {{ 'badge-primary' if m.role in ('owner','admin') }}">{{ m.role|capitalize }}</span>
+            {% endif %}
+            <div class="help">{{ role_help[m.role] }}</div>
+          </td>
+          <td>
+            {% if m.status == 'active' %}<span class="badge badge-success">Active</span>
+            {% elif m.status == 'invited' %}<span class="badge badge-warning">Invited</span>
+              <div class="help">Sent {{ m.invited_at|dt(user.default_timezone, '%d %b %Y') }}</div>
+            {% else %}<span class="badge badge-danger">Deactivated</span>{% endif %}
+          </td>
+          <td style="text-align:right">
+            {% if ctx.can('admin') and not (u and u.id == user.id) %}
+            <div class="row" style="justify-content:flex-end">
+              {% if m.status == 'invited' %}
+                <form method="post" action="/app/teams/members/{{ m.id }}/resend" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Resend</button></form>
+                <form method="post" action="/app/teams/members/{{ m.id }}/revoke" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Revoke this invitation?">Revoke</button></form>
+              {% elif m.status == 'active' %}
+                <form method="post" action="/app/teams/members/{{ m.id }}/deactivate" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit" data-confirm="Deactivate this member? They lose access but history is kept.">Deactivate</button></form>
+              {% else %}
+                <form method="post" action="/app/teams/members/{{ m.id }}/reactivate" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Reactivate</button></form>
+              {% endif %}
+              {% if m.status != 'invited' %}
+              <form method="post" action="/app/teams/members/{{ m.id }}/remove" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Remove this member from the workspace?">Remove</button></form>
+              {% endif %}
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+{% else %}
+  {% if not has_feature(workspace, 'teams') %}
+    <div class="alert alert-info">Teams, team pages and shared team event types are part of the Teams plan. <a href="/app/settings">Upgrade</a></div>
+  {% endif %}
+  <div class="grid grid-2">
+    <section class="card">
+      <h2>Your teams</h2>
+      {% if teams %}
+      <div class="stack">
+        {% for t in teams %}
+        <div class="spread" style="border-bottom:1px solid var(--border);padding-bottom:10px">
+          <div class="row">
+            {% if t.logo_url %}<img src="{{ t.logo_url }}" alt="" class="avatar avatar-sm">{% else %}<span class="avatar avatar-sm" aria-hidden="true">{{ t.name[:1]|upper }}</span>{% endif %}
+            <div><a href="/app/teams/{{ t.id }}"><strong>{{ t.name }}</strong></a><br>
+              <span class="muted">/team/{{ t.slug }} · {{ counts.get(t.id, 0) }} member{{ 's' if counts.get(t.id, 0) != 1 }} · {{ ev_counts.get(t.id, 0) }} event type{{ 's' if ev_counts.get(t.id, 0) != 1 }}</span></div>
+          </div>
+          <a class="btn btn-sm" href="/team/{{ t.slug }}" target="_blank" rel="noopener">Team page ↗</a>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+        <div class="empty">No teams yet. Teams group members who host shared round-robin or collective events.</div>
+      {% endif %}
+    </section>
+    {% if ctx.can('admin') and has_feature(workspace, 'teams') %}
+    <form class="card" method="post" action="/app/teams/create">
+      {{ csrf_input(request) }}
+      <h2>Create a team</h2>
+      <div class="field"><label for="t-name">Team name</label><input id="t-name" type="text" name="name" required maxlength="200"></div>
+      <div class="field"><label for="t-slug">Team link</label><input id="t-slug" type="text" name="slug" placeholder="sales" pattern="[a-zA-Z0-9-]*">
+        <p class="help">{{ base_url }}/team/<em>link</em></p></div>
+      <div class="field"><label for="t-desc">Description</label><textarea id="t-desc" name="description" rows="2"></textarea></div>
+      <div class="field"><label for="t-logo">Logo URL</label><input id="t-logo" type="url" name="logo_url" placeholder="https://…"></div>
+      <button class="btn btn-primary" type="submit">Create team</button>
+    </form>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AAL Scheduler</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon-32.png" alt="" width="20" height="20">
+    <strong>AAL Scheduler</strong>
+    <span class="spacer"></span>
+    <a id="open-app" href="#" title="Open the web app">Open app ↗</a>
+    <button id="settings" class="icon" title="Settings" aria-label="Settings">⚙</button>
+  </header>
+
+  <div id="setup" hidden>
+    <p>Connect the extension to your workspace.</p>
+    <button id="go-options" class="primary">Set up</button>
+  </div>
+
+  <div id="error" class="error" role="alert" hidden></div>
+
+  <main id="main" hidden>
+    <section aria-labelledby="links-h">
+      <h2 id="links-h">Event types</h2>
+      <ul id="event-types" class="list"><li class="muted">Loading…</li></ul>
+    </section>
+    <section aria-labelledby="up-h">
+      <h2 id="up-h">Upcoming meetings <span id="tz" class="muted"></span></h2>
+      <ul id="upcoming" class="list"><li class="muted">Loading…</li></ul>
+    </section>
+  </main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

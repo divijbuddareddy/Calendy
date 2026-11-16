@@ -1,0 +1,29 @@
+{% extends "public_base.html" %}
+{% block title %}{{ owner.name or owner.slug }}{% endblock %}
+{% block head %}{% include "public/_styles.html" %}{% endblock %}
+{% block content %}
+<div class="public-wrap">
+  <header class="profile-head">
+    {% with u=owner, small=False %}{% include "public/_host_avatar.html" %}{% endwith %}
+    <h1>{{ owner.name or owner.slug }}</h1>
+    {% if owner.headline %}<p class="muted">{{ owner.headline }}</p>{% endif %}
+    <p class="muted">{{ t('profile.welcome') }}</p>
+  </header>
+  {% if events %}
+  <div class="event-list">
+    {% for e in events %}
+    <a class="card" href="/{{ owner.slug }}/{{ e.slug }}{{ ('?' ~ passthrough) if passthrough }}" style="border-top-color: {{ e.color }}">
+      <h2 style="font-size:1.1rem">{{ e.name }}</h2>
+      <div class="meta-line">⏱ {% if e.durations_json and e.durations_json|length > 1 %}{{ t('book.minutes', n=e.durations_json|join(' / ')) }}{% else %}{{ t('book.minutes', n=e.duration) }}{% endif %}</div>
+      {% if e.kind != 'one_on_one' %}<div class="meta-line">👥 {{ t('kind.' ~ e.kind) }}</div>{% endif %}
+      {% if e.price_minor %}<div class="meta-line">💳 {{ e.price_minor|money(e.currency) }}</div>{% endif %}
+      {% if e.description %}<p class="muted" style="margin:8px 0 0">{{ e.description|truncate(120) }}</p>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card empty">{{ t('profile.no_events') }}</div>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}{% if embedded %}<script src="/static/booking.js"></script>{% endif %}{% endblock %}

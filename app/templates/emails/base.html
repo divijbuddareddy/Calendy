@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ app_name }}</title></head>
+<body style="margin:0;padding:0;background:#f6f7fb;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a1f36;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7fb;padding:28px 12px;">
+<tr><td align="center">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;background:#ffffff;border:1px solid #e3e6ef;border-radius:12px;overflow:hidden;">
+    <tr><td style="padding:18px 28px;border-bottom:1px solid #e3e6ef;">
+      <span style="display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:7px;background:#3b47d6;color:#fff;font-weight:700;font-size:13px;">A</span>
+      <strong style="margin-left:8px;font-size:15px;vertical-align:middle;">{{ app_name }}</strong>
+    </td></tr>
+    <tr><td style="padding:26px 28px;font-size:15px;line-height:1.55;">
+      {% block body %}{% endblock %}
+    </td></tr>
+    <tr><td style="padding:16px 28px;background:#f1f3f9;color:#5b6380;font-size:12px;line-height:1.5;">
+      {% block footer %}Sent by {{ app_name }} · <a href="{{ base_url }}" style="color:#5b6380;">{{ base_url }}</a>{% endblock %}
+    </td></tr>
+  </table>
+</td></tr></table>
+</body></html>

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Audit log{% endblock %}
+{% block content %}
+{% include "app/admin/_tabs.html" %}
+<form class="card" method="get" action="/app/admin/audit" aria-label="Search audit log">
+  <div class="field"><label for="a-q">Search</label><input id="a-q" type="search" name="q" value="{{ params.q }}" placeholder="Free text: action, actor email, entity, IP or details"></div>
+  <div class="inline-fields">
+    <div class="field"><label for="a-action">Action</label><input id="a-action" type="text" name="action" value="{{ params.action }}" placeholder="e.g. member.role_changed"></div>
+    <div class="field"><label for="a-actor">Actor (email or id)</label><input id="a-actor" type="text" name="actor" value="{{ params.actor }}"></div>
+    <div class="field"><label for="a-entity">Entity (type or id)</label><input id="a-entity" type="text" name="entity" value="{{ params.entity }}"></div>
+    <div class="field"><label for="a-from">From</label><input id="a-from" type="date" name="from" value="{{ params['from'] }}"></div>
+    <div class="field"><label for="a-to">To</label><input id="a-to" type="date" name="to" value="{{ params.to }}"></div>
+  </div>
+  <div class="row">
+    <button class="btn btn-primary" type="submit">Search</button>
+    <a class="btn btn-ghost" href="/app/admin/audit">Reset</a>
+    {% if can_export %}<a class="btn" href="/app/admin/audit.csv?{{ query }}">Export CSV</a> <a class="btn" href="/app/admin/audit.json?{{ query }}">Export JSON</a>
+    {% else %}<button class="btn" type="button" disabled title="Enterprise plan">Export CSV</button><span class="help">Audit export is available on Enterprise.</span>{% endif %}
+  </div>
+</form>
+<div class="card mt">
+  {% if rows %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>When</th><th>Action</th><th>Actor</th><th>Entity</th><th>Details</th><th>IP</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.created_at | dt(user.default_timezone) }}</td>
+        <td><code>{{ r.action }}</code></td>
+        <td>{{ actors.get(r.actor_id, r.actor_id or 'system') }}</td>
+        <td>{{ r.entity_type or '' }}{% if r.entity_id %}<br><small>{{ r.entity_id }}</small>{% endif %}</td>
+        <td><small>{% for k, v in (r.metadata_json or {}).items() %}{{ k }}: {{ v }}{% if not loop.last %}; {% endif %}{% endfor %}</small></td>
+        <td><small>{{ r.ip or '' }}</small></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="help">Showing the latest {{ rows|length }} matching entries.</p>
+  {% else %}<p class="empty">No audit entries match these filters.</p>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "public_base.html" %}
+{% block title %}{{ t('manage.manage_booking') }}: {{ snap.name }}{% endblock %}
+{% block head %}{% include "public/_styles.html" %}{% endblock %}
+{% block content %}
+<div class="public-wrap narrow">
+  <div class="card" style="padding:28px">
+    <div class="spread">
+      <h1 style="margin:0">{{ t('manage.your_booking') }}</h1>
+      {% set badge = {'confirmed':'success','pending':'warning','pending_payment':'warning','held':'warning','cancelled':'danger','expired':'danger','failed':'danger','rescheduled':'primary'}.get(b.status, '') %}
+      <span class="badge badge-{{ badge }}">{{ status_label(b.status) }}</span>
+    </div>
+    <hr class="divider">
+    {% if b.status == 'rescheduled' and new_booking %}
+      <div class="alert alert-info">{{ t('manage.moved_to', when=new_booking.start_at|ldt(new_booking.timezone)) }}
+        <a href="/booking/{{ new_booking.manage_token }}">{{ t('confirm.view_updated') }}</a></div>
+    {% elif b.status == 'cancelled' %}
+      {% set by_role = {'host': t('manage.by_host'), 'invitee': t('manage.by_invitee')} %}
+      <div class="alert alert-warning">{{ t('manage.cancelled_detail',
+          by=(' ' ~ by_role.get(b.cancelled_by, t('manage.by_other', who=b.cancelled_by))) if b.cancelled_by else '',
+          on=(' ' ~ t('manage.on_date', date=b.cancelled_at|ldt(tz))) if b.cancelled_at else '') }}{% if b.cancel_reason %}<br>{{ t('manage.reason', reason=b.cancel_reason) }}{% endif %}</div>
+    {% elif b.cancellation_requested_at %}
+      <div class="alert alert-info">{{ t('manage.request_pending') }}</div>
+    {% elif b.status in ('pending', 'held') %}
+      <div class="alert alert-warning">{{ t('manage.pending_body') }}</div>
+    {% elif b.status == 'pending_payment' %}
+      <div class="alert alert-warning">{{ t('manage.payment_required') }} <a href="/pay/{{ b.manage_token }}">{{ t('confirm.complete_payment') }}</a></div>
+    {% elif b.status in ('expired', 'failed') %}
+      <div class="alert alert-error">{{ t('manage.reservation_' ~ b.status) }}</div>
+    {% endif %}
+    {% if b.no_show %}<div class="alert alert-warning">{{ t('manage.no_show') }}</div>{% endif %}
+
+    {% include "public/_summary.html" %}
+
+    {% if b.status == 'confirmed' %}{% include "public/_calendar_links.html" %}{% endif %}
+
+    {% if b.status in ('confirmed', 'pending', 'pending_payment', 'held') and not b.cancellation_requested_at %}
+    <hr class="divider">
+    <div class="row">
+      {% if b.status == 'confirmed' and policy.allow_reschedule != false %}<a class="btn" href="/booking/{{ b.manage_token }}/reschedule{{ ('?' ~ embed_qs) if embedded }}">{{ t('manage.reschedule') }}</a>{% endif %}
+      {% if policy.allow_cancel != false %}<a class="btn btn-danger" href="/booking/{{ b.manage_token }}/cancel{{ ('?' ~ embed_qs) if embedded }}">{{ t('manage.cancel_booking') }}</a>{% endif %}
+    </div>
+    {% if policy.policy_text %}<p class="help">{{ policy.policy_text }}</p>{% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}{% if embedded %}<script src="/static/booking.js"></script>{% endif %}{% endblock %}

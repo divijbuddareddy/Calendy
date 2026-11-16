@@ -1,0 +1,10 @@
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7fb;border:1px solid #e3e6ef;border-radius:10px;margin:14px 0;">
+<tr><td style="padding:16px 18px;font-size:14px;line-height:1.6;">
+  <div style="font-size:16px;font-weight:700;margin-bottom:6px;">{{ event_name }}</div>
+  <div><strong>When:</strong> {{ when }} <span style="color:#5b6380;">({{ tz }})</span></div>
+  <div><strong>Duration:</strong> {{ duration }} min</div>
+  {% if hosts %}<div><strong>Host:</strong> {{ hosts|map(attribute='name')|join(', ') }}</div>{% endif %}
+  {% if invitees %}<div><strong>Invitee:</strong> {% for i in invitees %}{{ i.name }} &lt;{{ i.email }}&gt;{% if i.phone %} · {{ i.phone }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+  <div><strong>Where:</strong> {% if join_url %}<a href="{{ join_url }}" style="color:#3b47d6;">{{ join_url }}</a>{% else %}{{ location }}{% endif %}</div>
+  {% if host_action_required and audience == 'host' %}<div style="margin-top:8px;padding:8px 10px;background:#fff4dc;color:#8a5a00;border-radius:6px;"><strong>Host action required:</strong> the video link could not be created automatically. Please send meeting details to the invitee.</div>{% endif %}
+</td></tr></table>

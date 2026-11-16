@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ wf.name if wf else 'New workflow' }}{% endblock %}
+{% block content %}
+<p><a href="/app/workflows">← Workflows</a></p>
+<div class="page-head">
+  <div>
+    <h1>{{ wf.name if wf else 'New workflow' }}</h1>
+    {% if wf and wf.managed %}<span class="badge badge-primary">Managed workflow</span>{% endif %}
+    {% if readonly %}<p class="muted">This workflow is managed by a workspace admin. You can view and test it but not change it.</p>{% endif %}
+  </div>
+  {% if wf %}<div class="row"><a class="btn" href="/app/workflows/{{ wf.id }}/runs">Run history</a></div>{% endif %}
+</div>
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+
+<div class="grid grid-2">
+  <form method="post" action="{{ '/app/workflows/' ~ wf.id if wf else '/app/workflows' }}" class="card" id="wf-form">
+    {{ csrf_input(request) }}
+    <fieldset {{ 'disabled' if readonly }} style="border:0;padding:0;margin:0">
+    <div class="field"><label for="name">Name</label><input id="name" type="text" name="name" value="{{ f.name }}" required maxlength="200"></div>
+    <div class="field"><label for="trigger">When this happens</label>
+      <select id="trigger" name="trigger">{% for k, v in triggers.items() %}<option value="{{ k }}" {{ 'selected' if f.trigger == k }}>{{ v }}</option>{% endfor %}</select></div>
+    <div class="inline-fields">
+      <div class="field"><label for="offset_value">Timing offset</label><input id="offset_value" type="number" min="0" name="offset_value" value="{{ f.offset_value }}"></div>
+      <div class="field"><label for="offset_unit">Unit</label>
+        <select id="offset_unit" name="offset_unit">{% for u in ['minutes', 'hours', 'days'] %}<option value="{{ u }}" {{ 'selected' if f.offset_unit == u }}>{{ u }}</option>{% endfor %}</select></div>
+    </div>
+    <p class="help" style="margin-top:-8px">“Before event” sends this long before the start; “After event” after the end; other triggers delay by this amount (0 = immediately).</p>
+    <div class="inline-fields">
+      <div class="field"><label for="channel">Send</label>
+        <select id="channel" name="channel"><option value="email" {{ 'selected' if f.channel == 'email' }}>Email</option>
+          <option value="sms" {{ 'selected' if f.channel == 'sms' }} {{ 'disabled' if not sms_enabled }}>SMS{{ '' if sms_enabled else ' (upgrade)' }}</option></select></div>
+      <div class="field"><label for="audience">To</label>
+        <select id="audience" name="audience">{% for a, l in [('invitee', 'Invitee'), ('host', 'Host(s)'), ('custom', 'Custom recipient')] %}<option value="{{ a }}" {{ 'selected' if f.audience == a }}>{{ l }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="field" id="custom-wrap"><label for="custom_recipient">Custom recipient (email or phone)</label><input id="custom_recipient" type="text" name="custom_recipient" value="{{ f.custom_recipient }}"></div>
+    <p class="help" id="sms-note">SMS is only sent to invitees who gave SMS consent on the booking form, and never after they reply STOP.</p>
+    <div class="field" id="subject-wrap"><label for="subject_template">Subject</label><input id="subject_template" type="text" name="subject_template" value="{{ f.subject_template }}" maxlength="500"></div>
+    <div class="field"><label for="body_template">Message</label><textarea id="body_template" name="body_template" rows="9">{{ f.body_template }}</textarea>
+      <div class="help">Variables: {% for v in variables %}<button type="button" class="btn btn-sm btn-ghost" data-insert="{{ '{' ~ v ~ '}' }}" style="padding:1px 5px"><code>{{ '{' ~ v ~ '}' }}</code></button>{% endfor %}<br>Times are rendered in each recipient's timezone.</div></div>
+    <fieldset class="field" style="border:0;padding:0">
+      <legend style="font-weight:600;font-size:.88rem;margin-bottom:4px">Applies to event types</legend>
+      {% for et in event_types %}<label class="check"><input type="checkbox" name="event_type_ids" value="{{ et.id }}" {{ 'checked' if et.id in f.event_type_ids }}> {{ et.name }}</label>{% else %}<p class="muted">No event types yet.</p>{% endfor %}
+      <p class="help">Leave all unchecked to apply to every event type you host.</p>
+    </fieldset>
+    <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if f.active }}> Active</label>
+    {% if can_manage %}<label class="check"><input type="checkbox" name="managed" value="1" {{ 'checked' if f.managed }}> Managed workflow (applies workspace-wide; members can't edit)</label>{% endif %}
+    {% if not readonly %}<button class="btn btn-primary mt" type="submit">{{ 'Save workflow' if wf else 'Create workflow' }}</button>{% endif %}
+    </fieldset>
+  </form>
+
+  <div>
+    <section class="card">
+      <div class="card-head"><h2 style="margin:0">Preview</h2><span class="muted" style="font-size:.85rem">sample data</span></div>
+      <div id="pv-subject" style="font-weight:600;margin-bottom:8px">{{ preview.subject }}</div>
+      <iframe id="pv-frame" title="Message preview" sandbox="" style="width:100%;height:420px;border:1px solid var(--border);border-radius:8px;background:#fff" srcdoc="{{ preview.html }}"></iframe>
+    </section>
+    {% if wf %}
+    <section class="card">
+      <h2>Test send</h2>
+      <form method="post" action="/app/workflows/{{ wf.id }}/test" class="row">
+        {{ csrf_input(request) }}
+        {% if wf.channel == 'sms' %}<input type="tel" name="phone" placeholder="+44…" aria-label="Phone number" style="max-width:200px">{% endif %}
+        <button class="btn" type="submit">Send test to {{ 'this number' if wf.channel == 'sms' else user.email }}</button>
+      </form>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2 style="margin:0">Recent runs</h2><a href="/app/workflows/{{ wf.id }}/runs">All →</a></div>
+      {% include "app/workflows/_runs_table.html" with context %}
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  var form=document.getElementById('wf-form'), body=document.getElementById('body_template'), t;
+  function sync(){
+    var ch=form.channel.value, aud=form.audience.value;
+    document.getElementById('subject-wrap').style.display = ch==='sms'?'none':'';
+    document.getElementById('sms-note').style.display = ch==='sms'?'':'none';
+    document.getElementById('custom-wrap').style.display = aud==='custom'?'':'none';
+  }
+  function preview(){
+    clearTimeout(t); t=setTimeout(function(){
+      var fd=new FormData(form);
+      fetch('/app/workflows/preview',{method:'POST',body:fd,headers:{'X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content}})
+        .then(function(r){return r.json();}).then(function(d){
+          document.getElementById('pv-subject').textContent=d.subject;
+          document.getElementById('pv-frame').srcdoc= form.channel.value==='sms' ? '<pre style="font:15px system-ui;white-space:pre-wrap;padding:12px">'+d.body.replace(/[&<]/g,function(c){return c==='&'?'&amp;':'&lt;';})+'</pre>' : d.html;
+        });
+    },300);
+  }
+  form.addEventListener('input',preview); form.addEventListener('change',function(){sync();preview();});
+  document.querySelectorAll('[data-insert]').forEach(function(b){b.addEventListener('click',function(){
+    var v=b.getAttribute('data-insert'), s=body.selectionStart||body.value.length;
+    body.value=body.value.slice(0,s)+v+body.value.slice(body.selectionEnd||s); body.focus(); preview();
+  });});
+  sync();
+})();
+</script>
+{% endblock %}

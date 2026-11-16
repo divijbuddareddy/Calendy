@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Webhooks{% endblock %}
+{% block content %}
+{% include "app/integrations/_tabs.html" %}
+
+{% if new_secret %}
+<div class="alert alert-warning" role="alert">
+  <strong>Signing secret (shown once):</strong>
+  <div class="row mt"><code style="font-size:1rem">{{ new_secret.secret }}</code><button class="btn btn-sm" data-copy="{{ new_secret.secret }}">Copy</button></div>
+</div>
+{% endif %}
+
+<div class="grid grid-2">
+  <section class="card">
+    <h2>New subscription</h2>
+    <form method="post" action="/app/integrations/webhooks">
+      {{ csrf_input(request) }}
+      <div class="field"><label for="endpoint">Endpoint URL</label><input id="endpoint" type="url" name="endpoint" placeholder="https://example.com/webhooks/aal" required></div>
+      <fieldset class="field" style="border:0;padding:0">
+        <legend style="font-weight:600;font-size:.88rem;margin-bottom:4px">Events</legend>
+        {% for e in events %}<label class="check"><input type="checkbox" name="events" value="{{ e }}" checked> <code>{{ e }}</code></label>{% endfor %}
+      </fieldset>
+      <button class="btn btn-primary" type="submit">Create subscription</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Verifying signatures</h2>
+    <p class="muted">Each request is a JSON <code>POST</code> with <code>{id, event, created_at, payload}</code> and headers <code>X-AAL-Event-Id</code>, <code>X-AAL-Event</code> and <code>X-AAL-Signature: t=&lt;unix&gt;,v1=&lt;hex&gt;</code>.</p>
+    <pre>expected = HMAC_SHA256(secret, f"{t}." + raw_body).hex()
+valid = compare_digest(expected, v1) and abs(now - t) &lt; 300
+# de-duplicate on X-AAL-Event-Id (retries reuse it)</pre>
+    <p class="help">Failed deliveries are retried with exponential backoff (up to 6 attempts) and then marked <strong>dead</strong>.</p>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Subscriptions</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Endpoint</th><th>Events</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for s in subs %}
+        <tr>
+          <td><code>{{ s.endpoint }}</code><div class="muted" style="font-size:.8rem">{{ s.id }}</div></td>
+          <td>{% for e in s.events %}<span class="badge">{{ e }}</span> {% endfor %}</td>
+          <td>{% if s.active %}<span class="badge badge-success">Active</span>{% else %}<span class="badge">Paused</span>{% endif %}</td>
+          <td class="row" style="gap:4px">
+            <form method="post" action="/app/integrations/webhooks/{{ s.id }}/test">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Send test</button></form>
+            <form method="post" action="/app/integrations/webhooks/{{ s.id }}/toggle">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">{{ 'Pause' if s.active else 'Enable' }}</button></form>
+            <form method="post" action="/app/integrations/webhooks/{{ s.id }}/delete">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Delete this webhook subscription and its delivery log?">Delete</button></form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="empty">No webhook subscriptions yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h2 style="margin:0">Delivery log</h2>
+    <div class="row">
+      {% for s_ in ['', 'pending', 'delivered', 'failed', 'dead'] %}
+        <a class="btn btn-sm {{ 'btn-primary' if status == s_ }}" href="/app/integrations/webhooks{{ '?status=' ~ s_ if s_ }}">{{ s_ or 'All' }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Time</th><th>Event</th><th>Endpoint</th><th>Status</th><th>Response</th><th>Attempts</th><th></th></tr></thead>
+      <tbody>
+      {% for d in deliveries %}
+        <tr>
+          <td>{{ d.created_at|dt(user.default_timezone) }}</td>
+          <td><code>{{ d.topic }}</code><div class="muted" style="font-size:.75rem">{{ d.event_id }}</div></td>
+          <td style="max-width:220px;word-break:break-all">{{ sub_map[d.subscription_id].endpoint if d.subscription_id in sub_map else '' }}</td>
+          <td><span class="badge {{ {'delivered':'badge-success','failed':'badge-warning','dead':'badge-danger','pending':'badge-primary'}.get(d.status, '') }}">{{ d.status }}</span>
+            {% if d.next_retry_at and d.status == 'failed' %}<div class="muted" style="font-size:.75rem">next retry {{ d.next_retry_at|dt(user.default_timezone, "%H:%M:%S") }}</div>{% endif %}</td>
+          <td>{{ d.response_code or '–' }}
+            <details><summary class="muted" style="font-size:.8rem">Details</summary>
+              <pre>{{ d.payload_json|tojson(indent=2) }}</pre>
+              {% if d.response_body %}<pre>{{ d.response_body }}</pre>{% endif %}
+            </details></td>
+          <td>{{ d.attempts }}</td>
+          <td>{% if d.status in ('failed', 'dead') %}<form method="post" action="/app/integrations/webhooks/deliveries/{{ d.id }}/retry">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Retry</button></form>{% endif %}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">No deliveries yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

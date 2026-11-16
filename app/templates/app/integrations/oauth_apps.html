@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}OAuth apps{% endblock %}
+{% block content %}
+{% include "app/integrations/_tabs.html" %}
+
+{% if new_secret %}
+<div class="alert alert-warning" role="alert">
+  <strong>Client credentials (secret shown once):</strong>
+  <div class="mt">client_id: <code>{{ new_secret.client_id }}</code></div>
+  <div class="row mt">client_secret: <code style="word-break:break-all">{{ new_secret.secret }}</code><button class="btn btn-sm" data-copy="{{ new_secret.secret }}">Copy</button></div>
+</div>
+{% endif %}
+
+{% if can_manage %}
+<div class="grid grid-2">
+  <section class="card">
+    <h2>Register an OAuth app</h2>
+    <form method="post" action="/app/integrations/oauth-apps">
+      {{ csrf_input(request) }}
+      <div class="field"><label for="oa-name">App name</label><input id="oa-name" name="name" required maxlength="200" placeholder="e.g. Acme CRM"></div>
+      <div class="field"><label for="oa-home">Homepage URL (optional)</label><input id="oa-home" name="homepage_url" type="url"></div>
+      <div class="field"><label for="oa-redir">Redirect URIs (one per line)</label><textarea id="oa-redir" name="redirect_uris" rows="3" required placeholder="https://app.example.com/oauth/callback"></textarea></div>
+      <fieldset class="field" style="border:0;padding:0">
+        <legend style="font-weight:600;font-size:.88rem;margin-bottom:4px">Scopes the app may request</legend>
+        {% for s, label in scope_labels.items() %}<label class="check"><input type="checkbox" name="scopes" value="{{ s }}" {{ 'checked' if s == 'read' }}> <strong>{{ s }}</strong> – {{ label }}</label>{% endfor %}
+      </fieldset>
+      <button class="btn btn-primary" type="submit">Register app</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Authorization code flow (PKCE required)</h2>
+    <pre>1. Redirect the user to
+{{ base_url }}/oauth/authorize?response_type=code
+  &amp;client_id=…&amp;redirect_uri=…&amp;scope=read%20write&amp;state=…
+  &amp;code_challenge=BASE64URL(SHA256(verifier))&amp;code_challenge_method=S256
+
+2. Exchange the code
+curl -u CLIENT_ID:CLIENT_SECRET {{ base_url }}/oauth/token \
+  -d grant_type=authorization_code -d code=… \
+  -d redirect_uri=… -d code_verifier=…
+
+3. Call the API
+curl {{ base_url }}/api/v1/me -H "Authorization: Bearer aal_at_…"
+
+4. Refresh (rotates both tokens)
+curl -u CLIENT_ID:CLIENT_SECRET {{ base_url }}/oauth/token \
+  -d grant_type=refresh_token -d refresh_token=aal_rt_…</pre>
+    <p class="help">Access tokens last 1 hour, refresh tokens 60 days. Revoke with <code>POST /oauth/revoke</code> (RFC 7009). Metadata: <a href="/.well-known/oauth-authorization-server">/.well-known/oauth-authorization-server</a>.</p>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Your workspace's apps</h2>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Name</th><th>client_id</th><th>Redirect URIs</th><th>Scopes</th><th></th></tr></thead>
+    <tbody>
+    {% for a in apps %}
+      <tr>
+        <td>{{ a.name }}</td><td><code>{{ a.client_id }}</code></td>
+        <td>{% for u in a.redirect_uris %}<div><code>{{ u }}</code></div>{% endfor %}</td>
+        <td>{% for s in a.scopes.split() %}<span class="badge">{{ s }}</span> {% endfor %}</td>
+        <td class="row">
+          <form method="post" action="/app/integrations/oauth-apps/{{ a.id }}/rotate-secret">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit" data-confirm="Generate a new client secret? The current one stops working immediately.">Rotate secret</button></form>
+          <form method="post" action="/app/integrations/oauth-apps/{{ a.id }}/delete">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Delete this app and revoke all of its tokens?">Delete</button></form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="empty">No OAuth apps registered.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% else %}
+<div class="alert alert-info">Registering OAuth apps requires the Standard plan or higher and the admin role.</div>
+{% endif %}
+
+<section class="card">
+  <h2>Apps you've authorized</h2>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>App</th><th>Access</th><th>Last used</th><th></th></tr></thead>
+    <tbody>
+    {% for g in authorized %}
+      <tr>
+        <td>{{ g.app.name }}</td>
+        <td>{% for s in g.scopes|sort %}<span class="badge">{{ s }}</span> {% endfor %}</td>
+        <td>{{ g.last_used_at|dt(user.default_timezone) if g.last_used_at else 'Never' }}</td>
+        <td><form method="post" action="/app/integrations/authorized-apps/{{ g.app.id }}/revoke">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Revoke this app's access?">Revoke access</button></form></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="empty">You haven't authorized any third-party apps.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endblock %}

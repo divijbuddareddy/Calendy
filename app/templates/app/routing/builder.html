@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}{{ rf.name }} · Routing{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="muted" style="margin:0"><a href="/app/routing">← Routing forms</a></p>
+    <h1>{{ rf.name }} {% if rf.status == 'active' %}<span class="badge badge-success">Active</span>{% else %}<span class="badge">Paused</span>{% endif %}</h1>
+    <p class="muted">{{ public_url }}</p>
+  </div>
+  <div class="row">
+    <button class="btn" type="button" data-copy="{{ public_url }}">Copy link</button>
+    <a class="btn" href="/r/{{ workspace.slug }}/{{ rf.slug }}" target="_blank" rel="noopener">Open ↗</a>
+    <a class="btn" href="/app/routing/{{ rf.id }}/submissions">Submissions</a>
+    <a class="btn btn-primary" href="/app/routing/{{ rf.id }}/preview">Preview &amp; test</a>
+  </div>
+</div>
+{% if not can_edit %}<div class="alert alert-info">You have read-only access to this form.</div>{% endif %}
+
+<div class="grid grid-2">
+  <div>
+    <section class="card" id="questions">
+      <h2>1. Questions</h2>
+      {% if rf.form_schema_json %}
+      <ol class="stack" style="padding-left:20px">
+        {% for f in rf.form_schema_json %}
+        <li>
+          <div class="spread">
+            <div><strong>{{ f.label }}</strong>{% if f.required %} <span class="badge">Required</span>{% endif %}<br>
+              <span class="muted">{{ field_type_labels.get(f.type, f.type) }}{% if f.options %} · {{ f.options|join(', ') }}{% endif %} · id <code>{{ f.id }}</code></span></div>
+            {% if can_edit %}
+            <div class="row">
+              {% for a, lbl in [('up','↑'),('down','↓')] %}
+              <form method="post" action="/app/routing/{{ rf.id }}/questions/{{ f.id }}/{{ a }}" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-ghost" type="submit" aria-label="Move {{ f.label }} {{ a }}">{{ lbl }}</button></form>
+              {% endfor %}
+              <form method="post" action="/app/routing/{{ rf.id }}/questions/{{ f.id }}/delete" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-ghost" type="submit" data-confirm="Delete this question?" aria-label="Delete {{ f.label }}">✕</button></form>
+            </div>
+            {% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}<div class="empty">No questions yet.</div>{% endif %}
+      {% if can_edit %}
+      <form method="post" action="/app/routing/{{ rf.id }}/questions" class="mt" style="border-top:1px solid var(--border);padding-top:14px">
+        {{ csrf_input(request) }}
+        <h3>Add question</h3>
+        <div class="inline-fields">
+          <div style="flex:2"><label for="q-label">Label</label><input id="q-label" type="text" name="label" required placeholder="Company size"></div>
+          <div><label for="q-type">Type</label><select id="q-type" name="type">{% for t in field_types %}<option value="{{ t }}">{{ field_type_labels[t] }}</option>{% endfor %}</select></div>
+        </div>
+        <div class="field mt"><label for="q-opts">Options</label><input id="q-opts" type="text" name="options" placeholder="1-10, 11-50, 51-200, 200+">
+          <p class="help">Comma-separated; needed for dropdown, radio and checkbox.</p></div>
+        <div class="field"><label for="q-help">Help text (optional)</label><input id="q-help" type="text" name="help"></div>
+        <label class="check"><input type="checkbox" name="required" value="1"> Required</label>
+        <button class="btn btn-sm btn-primary mt" type="submit">Add question</button>
+      </form>
+      {% endif %}
+    </section>
+
+    {% if can_edit %}
+    <form class="card" method="post" action="/app/routing/{{ rf.id }}/settings">
+      {{ csrf_input(request) }}
+      <h2>Settings</h2>
+      <div class="field"><label for="s-name">Name</label><input id="s-name" type="text" name="name" value="{{ rf.name }}" required></div>
+      <div class="field"><label for="s-slug">Link</label><input id="s-slug" type="text" name="slug" value="{{ rf.slug }}" pattern="[a-zA-Z0-9-]*"></div>
+      <div class="field"><label for="s-status">Status</label><select id="s-status" name="status">
+        <option value="active" {{ 'selected' if rf.status == 'active' }}>Active — accepting responses</option>
+        <option value="paused" {{ 'selected' if rf.status != 'active' }}>Paused</option></select></div>
+      <div class="spread"><button class="btn btn-primary" type="submit">Save</button></div>
+    </form>
+    <form class="card" method="post" action="/app/routing/{{ rf.id }}/delete">
+      {{ csrf_input(request) }}
+      <h2>Delete form</h2><p class="muted">Deletes the form and its submissions.</p>
+      <button class="btn btn-danger" type="submit" data-confirm="Delete this routing form and all submissions?">Delete form</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div>
+    <section class="card" id="rules">
+      <h2>2. Routing rules</h2>
+      <p class="muted">Rules are checked top to bottom; the first match wins.</p>
+      {% if rules %}
+      <ol class="stack" style="padding-left:20px">
+        {% for item in rules %}{% set r = item.rule %}
+        <li>
+          <div class="spread">
+            <div>
+              <strong>{{ r.name or ('Rule ' ~ loop.index) }}</strong> <span class="badge">{{ (r.logic or 'and')|upper }}</span><br>
+              <span class="muted">If {{ item.text }}</span><br>
+              → {{ item.dest }}
+            </div>
+            {% if can_edit %}
+            <div class="row">
+              {% for a, lbl in [('up','↑'),('down','↓')] %}
+              <form method="post" action="/app/routing/{{ rf.id }}/rules/{{ r.id }}/{{ a }}" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-ghost" type="submit" aria-label="Move rule {{ a }}">{{ lbl }}</button></form>
+              {% endfor %}
+              <form method="post" action="/app/routing/{{ rf.id }}/rules/{{ r.id }}/delete" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-ghost" type="submit" data-confirm="Delete rule?" aria-label="Delete rule">✕</button></form>
+            </div>
+            {% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}<div class="empty">No rules — everyone goes to the fallback destination.</div>{% endif %}
+
+      {% if can_edit and rf.form_schema_json %}
+      <form method="post" action="/app/routing/{{ rf.id }}/rules" class="mt" style="border-top:1px solid var(--border);padding-top:14px">
+        {{ csrf_input(request) }}
+        <h3>Add rule</h3>
+        <div class="inline-fields">
+          <div style="flex:2"><label for="r-name">Rule name</label><input id="r-name" type="text" name="name" placeholder="Enterprise leads"></div>
+          <div><label for="r-logic">Match</label><select id="r-logic" name="logic"><option value="and">ALL conditions (AND)</option><option value="or">ANY condition (OR)</option></select></div>
+        </div>
+        <fieldset class="mt" style="border:0;padding:0;margin-top:12px">
+          <legend style="font-weight:600;font-size:.88rem">Conditions <span class="muted">(leave unused rows blank)</span></legend>
+          {% for i in range(1, 4) %}
+          <div class="inline-fields" style="margin-bottom:8px">
+            <div><label class="sr-only" for="c{{ i }}f">Question {{ i }}</label>
+              <select id="c{{ i }}f" name="c{{ i }}_field"><option value="">— question —</option>{% for f in rf.form_schema_json %}<option value="{{ f.id }}">{{ f.label }}</option>{% endfor %}</select></div>
+            <div><label class="sr-only" for="c{{ i }}o">Operator {{ i }}</label>
+              <select id="c{{ i }}o" name="c{{ i }}_op">{% for o in ops %}<option value="{{ o }}">{{ op_labels[o] }}</option>{% endfor %}</select></div>
+            <div><label class="sr-only" for="c{{ i }}v">Value {{ i }}</label><input id="c{{ i }}v" type="text" name="c{{ i }}_value" placeholder="value"></div>
+          </div>
+          {% endfor %}
+          <p class="help">Need nested AND/OR groups? Use the advanced editor below.</p>
+        </fieldset>
+        {% set prefix = 'dest' %}{% set cur = None %}
+        {% include "app/routing/_dest.html" %}
+        <button class="btn btn-sm btn-primary" type="submit">Add rule</button>
+      </form>
+      {% endif %}
+    </section>
+
+    <section class="card" id="fallback">
+      <h2>3. Fallback destination <span class="badge badge-primary">Required</span></h2>
+      <p class="muted">Used when no rule matches. Currently: <strong>{{ fallback_text }}</strong></p>
+      {% if can_edit %}
+      <form method="post" action="/app/routing/{{ rf.id }}/fallback">
+        {{ csrf_input(request) }}
+        {% set prefix = 'fb' %}{% set cur = rf.fallback_json %}
+        {% include "app/routing/_dest.html" %}
+        <button class="btn btn-sm btn-primary" type="submit">Save fallback</button>
+      </form>
+      {% endif %}
+    </section>
+
+    <section class="card" id="prefill">
+      <h2>4. Booking page prefill</h2>
+      <p class="muted">Choose which booking-page field each answer fills in. {% if not prefill %}No mapping yet: answers are matched to event questions by label.{% endif %}</p>
+      <form method="post" action="/app/routing/{{ rf.id }}/prefill">
+        {{ csrf_input(request) }}
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th>Form question</th><th>Prefills</th></tr></thead>
+          <tbody>
+          {% for f in rf.form_schema_json %}
+            <tr><td><label for="map-{{ f.id }}">{{ f.label }}</label> <span class="muted">({{ field_type_labels.get(f.type, f.type) }})</span></td>
+              <td><select id="map-{{ f.id }}" name="map_{{ f.id }}" {{ 'disabled' if not can_edit }}>
+                <option value="">— don't prefill —</option>
+                {% for glabel, opts in prefill_targets %}<optgroup label="{{ glabel }}">
+                  {% for k, v in opts %}<option value="{{ k }}" {{ 'selected' if prefill.get(f.id) == k }}>{{ v }}</option>{% endfor %}
+                </optgroup>{% endfor %}
+              </select></td></tr>
+          {% endfor %}
+          </tbody>
+        </table></div>
+        {% if can_edit %}<button class="btn btn-sm btn-primary" type="submit">Save mapping</button>{% endif %}
+      </form>
+    </section>
+
+    {% if can_edit %}
+    <details class="card" id="advanced">
+      <summary><strong>Advanced: edit rules as JSON</strong> <span class="muted">(nested AND/OR groups)</span></summary>
+      <form method="post" action="/app/routing/{{ rf.id }}/rules-json" class="mt">
+        {{ csrf_input(request) }}
+        <label for="rj" class="sr-only">Rules JSON</label>
+        <textarea id="rj" name="rules_json" rows="14" style="font-family:ui-monospace,monospace;font-size:.82rem">{{ rules_json }}</textarea>
+        <p class="help">Each rule: <code>{"name","logic":"and|or","conditions":[{"field":"f1","op":"equals","value":"x"}, {"logic":"or","conditions":[…]}],"destination":{"type":"event_type|message|url|team|host|salesforce_lookup","value":"…"}}</code>. Ops: {{ ops|join(', ') }}.</p>
+        <button class="btn btn-sm" type="submit">Validate &amp; save</button>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  function sync(sel) {
+    var p = sel.getAttribute('data-dest-select');
+    document.querySelectorAll('[data-dest-pane^="' + p + ':"]').forEach(function (el) {
+      el.hidden = el.getAttribute('data-dest-pane') !== p + ':' + sel.value;
+    });
+  }
+  document.querySelectorAll('[data-dest-select]').forEach(function (s) { sync(s); s.addEventListener('change', function () { sync(s); }); });
+})();
+</script>
+{% endblock %}

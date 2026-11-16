@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Run history{% endblock %}
+{% block content %}
+<p><a href="{{ '/app/workflows/' ~ wf.id if wf else '/app/workflows' }}">← {{ wf.name if wf else 'Workflows' }}</a></p>
+<div class="page-head">
+  <div>
+    <h1>{{ 'Run history: ' ~ wf.name if wf else 'Message history' }}</h1>
+    <p class="muted" style="margin:0">{{ 'Every message this workflow scheduled or sent.' if wf else 'All notifications and workflow messages in this workspace (last 200).' }} Failed sends are retried automatically with exponential backoff.</p>
+  </div>
+  <div class="row">
+    {% for s_ in ['', 'scheduled', 'sent', 'failed', 'cancelled', 'skipped'] %}
+      <a class="btn btn-sm {{ 'btn-primary' if status == s_ }}" href="?status={{ s_ }}">{{ s_ or 'All' }}</a>
+    {% endfor %}
+  </div>
+</div>
+<section class="card">
+  {% set runs = jobs %}
+  {% include "app/workflows/_runs_table.html" with context %}
+</section>
+{% endblock %}

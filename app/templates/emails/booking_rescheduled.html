@@ -1,0 +1,14 @@
+{% extends "emails/base.html" %}
+{% block body %}
+<h1 style="font-size:20px;margin:0 0 8px;">Meeting rescheduled</h1>
+<p style="margin:0 0 4px;">
+{% if audience == 'host' %}{{ invitees[0].name if invitees else 'The invitee' }} moved <strong>{{ event_name }}</strong> to a new time.
+{% else %}Hi {{ invitees[0].name if invitees else 'there' }}, your <strong>{{ event_name }}</strong> with {{ host.name if host else 'your host' }} has a new time.{% endif %}
+</p>
+{% if old_when %}<p style="margin:10px 0 0;color:#5b6380;"><s>{{ old_when }}</s> <span style="font-size:12px;">(previous time, cancelled)</span></p>{% endif %}
+{% include "emails/_details.html" %}
+<p style="margin:14px 0 8px;"><a href="{{ gcal_url }}" style="display:inline-block;padding:9px 14px;background:#3b47d6;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">Add new time to Google Calendar</a></p>
+<p style="font-size:13px;color:#5b6380;">Attached: invite.ics (new time) and cancel-previous.ics (removes the old time).</p>
+{% if audience != 'host' %}<p style="font-size:14px;">Manage: <a href="{{ links.reschedule_url }}" style="color:#3b47d6;">Reschedule</a> · <a href="{{ links.cancel_url }}" style="color:#b42318;">Cancel</a></p>
+{% else %}<p style="font-size:14px;"><a href="{{ app_link }}" style="color:#3b47d6;">View booking</a></p>{% endif %}
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "public_base.html" %}
+{% block title %}{{ obj.name if kind == 'package' else obj.description }}{% endblock %}
+{% block content %}
+<div class="public-wrap" style="max-width:560px">
+  <div class="card" style="padding:28px">
+    {% if host %}<p class="muted" style="margin:0 0 4px">{{ host.name }}</p>{% endif %}
+    <h1 style="margin-top:0">{{ obj.name if kind == 'package' else obj.description }}</h1>
+    {% if kind == 'package' %}
+    <p class="muted">{{ obj.sessions }} × {{ event_type.name if event_type else 'session' }}{% if event_type %} ({{ event_type.duration }} min){% endif %}. After paying you'll receive a code by email – use it on the payment step each time you book.</p>
+    {% endif %}
+    <p><strong style="font-size:1.5rem">{{ amount|money(currency) }}</strong> <span class="muted">{{ currency }}</span></p>
+    {% if available %}
+    <form method="post" class="stack">
+      {{ csrf_input(request) }}
+      <div class="field"><label for="b-name">Your name</label><input id="b-name" name="name" maxlength="200" autocomplete="name"></div>
+      <div class="field"><label for="b-email">Email{% if kind == 'link' %} (for your receipt){% endif %}</label><input id="b-email" name="email" type="email" autocomplete="email" {{ 'required' if kind == 'package' }}></div>
+      <button class="btn btn-primary btn-block" type="submit">Pay {{ amount|money(currency) }}</button>
+    </form>
+    <p class="help mt">Payments go directly to {{ host.name if host else 'the host' }}'s payment account. We never see or store your card details.</p>
+    {% else %}
+    <div class="alert alert-warning">This is no longer available.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

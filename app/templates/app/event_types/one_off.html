@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}One-off meeting{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><a href="/app/event-types" class="muted">← Event types</a><h1 style="margin-top:6px">One-off meeting</h1>
+  <p class="muted" style="margin:0">Pick specific times to offer. You'll get a private link that only shows these times.</p></div>
+</div>
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+<form method="post" action="/app/event-types/one-off" class="card" style="max-width:720px">
+  {{ csrf_input(request) }}
+  <div class="grid grid-2">
+    <div class="field"><label for="name">Meeting name</label><input id="name" name="name" required value="{{ form.name or '' }}" placeholder="Project kickoff"></div>
+    <div class="field"><label for="duration">Duration (minutes)</label><input type="number" id="duration" name="duration" min="5" max="1440" value="{{ form.duration or 30 }}"></div>
+  </div>
+  <div class="grid grid-2">
+    <div class="field"><label for="location">Location</label>
+      <select id="location" name="location">{% for k, v in location_types.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="location_value">Location details</label><input id="location_value" name="location_value"></div>
+  </div>
+  <div class="field"><label for="description">Description</label><textarea id="description" name="description">{{ form.description or '' }}</textarea></div>
+  <div class="field">
+    <label>Times to offer <span class="muted">(your timezone: {{ user.default_timezone }})</span></label>
+    <div id="slots" class="stack">
+      <div class="row"><input type="datetime-local" name="slots" required aria-label="Time slot 1" style="max-width:280px"></div>
+    </div>
+    <button type="button" class="btn btn-sm mt" id="add-slot">+ Add another time</button>
+  </div>
+  <div class="row"><button class="btn btn-primary" type="submit">Create link</button><a class="btn btn-ghost" href="/app/event-types">Cancel</a></div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+  document.getElementById('add-slot').addEventListener('click', () => {
+    const wrap = document.getElementById('slots'), n = wrap.children.length + 1;
+    const row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = `<input type="datetime-local" name="slots" aria-label="Time slot ${n}" style="max-width:280px"> <button type="button" class="btn btn-sm btn-ghost" aria-label="Remove">✕</button>`;
+    row.querySelector('button').onclick = () => row.remove();
+    wrap.appendChild(row);
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,28 @@
+{# shared template fields; expects t (may be None), sections, location_types, loc, policy #}
+<div class="field"><label for="m-name">Event name</label><input id="m-name" type="text" name="name" value="{{ t.name if t else '' }}" required maxlength="200"></div>
+{% if not t %}
+<div class="field"><label for="m-slug">Link slug for members</label><input id="m-slug" type="text" name="slug" placeholder="intro-call" pattern="[a-zA-Z0-9-]*">
+  <p class="help">Each member gets /<em>their-username</em>/<em>slug</em>.</p></div>
+{% endif %}
+<div class="inline-fields">
+  <div><label for="m-dur">Duration (min)</label><input id="m-dur" type="number" name="duration" min="5" max="1440" value="{{ t.duration if t else 30 }}"></div>
+  <div><label for="m-notice">Min notice (min)</label><input id="m-notice" type="number" name="min_notice_minutes" min="0" value="{{ t.min_notice_minutes if t else 240 }}"></div>
+  <div><label for="m-bb">Buffer before</label><input id="m-bb" type="number" name="buffer_before" min="0" value="{{ t.buffer_before if t else 0 }}"></div>
+  <div><label for="m-ba">Buffer after</label><input id="m-ba" type="number" name="buffer_after" min="0" value="{{ t.buffer_after if t else 0 }}"></div>
+</div>
+<div class="inline-fields mt">
+  <div><label for="m-loc">Location</label>
+    <select id="m-loc" name="location">{% for k, v in location_types.items() %}<option value="{{ k }}" {{ 'selected' if loc and loc.get('type') == k }}>{{ v }}</option>{% endfor %}</select></div>
+  <div><label for="m-locv">Location details</label><input id="m-locv" type="text" name="location_value" value="{{ loc.get('value', '') if loc else '' }}" placeholder="Address, phone or link"></div>
+</div>
+<div class="field mt"><label for="m-desc">Description</label><textarea id="m-desc" name="description" rows="3">{{ (t.description or '') if t else '' }}</textarea></div>
+<div class="field"><label for="m-pol">Cancellation policy text</label><textarea id="m-pol" name="policy_text" rows="2">{{ (policy.get('policy_text') or '') if policy else '' }}</textarea></div>
+<fieldset class="field" style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px">
+  <legend style="font-weight:600;font-size:.88rem;padding:0 4px">Locked sections</legend>
+  <p class="help" style="margin-top:0">Locked sections can't be edited by members and are overwritten on sync. Unlocked ones are only copied on first assignment.</p>
+  <div class="grid grid-3">
+    {% for key, (label, cols) in sections.items() %}
+    <label class="check"><input type="checkbox" name="lock_{{ key }}" value="1" {{ 'checked' if t and key in (t.locked_fields_json or []) or (not t and key in ('duration','location','questions','description','cancellation_policy')) }}> {{ label }}</label>
+    {% endfor %}
+  </div>
+</fieldset>

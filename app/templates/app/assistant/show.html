@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Assistant request{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="muted"><a href="/app/assistant">&larr; Assistant</a></p>
+    {% if parsed.source == 'email' %}<h1>Email: {{ parsed.email.subject or 'meeting request' }}</h1>
+    {% else %}<h1>&ldquo;{{ req.prompt }}&rdquo;</h1>{% endif %}
+  </div>
+  <span class="badge {{ {'executed':'badge-success','rejected':'badge-danger','approved':'badge-primary'}.get(req.status, 'badge-warning') }}">{{ req.status }}</span>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>What I understood</h2>
+    <span class="badge {{ 'badge-success' if parsed.confidence >= 0.75 else ('badge-warning' if parsed.confidence >= 0.5 else 'badge-danger') }}">Confidence {{ (parsed.confidence * 100)|round|int }}%</span>
+  </div>
+  <div class="grid grid-4">
+    <div><div class="muted">Intent</div><strong>{{ parsed.intent }}</strong></div>
+    <div><div class="muted">Duration</div><strong>{% if parsed.duration %}{{ parsed.duration }} min{% else %}event default{% endif %}</strong></div>
+    <div><div class="muted">Dates</div><strong>{{ parsed.date_start }}{% if parsed.date_end != parsed.date_start %} &rarr; {{ parsed.date_end }}{% endif %}</strong>{% if parsed.time_of_day %}<div class="muted">{{ parsed.time_of_day }}</div>{% endif %}</div>
+    <div><div class="muted">Participant</div><strong>{% if parsed.participant %}{{ parsed.participant.name }}{% if parsed.participant.email %} &lt;{{ parsed.participant.email }}&gt;{% endif %}{% else %}&mdash;{% endif %}</strong>
+      {% if parsed.participant and not parsed.participant.contact_id %}<div class="help">Not in your contacts</div>{% endif %}</div>
+  </div>
+  {% if parsed.source == 'email' %}
+  <div class="mt"><div class="muted">From the email</div>
+    <p>Requester: <strong>{{ parsed.email.requester.name or '' }} &lt;{{ parsed.email.requester.email or 'unknown' }}&gt;</strong>
+      {% if parsed.email.participants %} &middot; Also on the thread: {% for o in parsed.email.participants %}{{ o.email }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}</p>
+    <details><summary>Latest message</summary><pre style="white-space:pre-wrap">{{ parsed.email.body }}</pre></details>
+  </div>
+  {% endif %}
+  <p class="help mt">Why: {{ parsed.rationale }}{% if parsed.alternatives %} &middot; Other possible matches: {% for a in parsed.alternatives %}{{ a.name }} &lt;{{ a.email }}&gt;{{ ', ' if not loop.last }}{% endfor %}{% endif %}</p>
+</div>
+
+{% if proposal.prep %}
+<div class="card">
+  <div class="card-head"><h2>Meeting prep</h2></div>
+  <p><strong>{{ proposal.prep.answer }}</strong></p>
+  {% set b = proposal.prep.brief %}
+  {% if b %}
+  <dl class="grid grid-2">
+    <div><dt class="muted">Invitee</dt><dd>{{ b.invitee.name }} &lt;{{ b.invitee.email }}&gt;{% if b.invitee.company %} &middot; {{ b.invitee.company }}{% endif %}</dd></div>
+    <div><dt class="muted">When / where</dt><dd>{{ b.when }}{% if b.location %} &middot; {{ b.location }}{% endif %}</dd></div>
+    <div><dt class="muted">History</dt><dd>{{ b.past_meetings }} past meeting(s){% if b.last_meeting %}, last {{ b.last_meeting }}{% endif %}</dd></div>
+    <div><dt class="muted">Contact</dt><dd>{% if b.contact.tags %}Tags: {{ b.contact.tags|join(', ') }}. {% endif %}{{ b.contact.notes or '' }}{% if b.contact.timezone %} ({{ b.contact.timezone }}){% endif %}</dd></div>
+  </dl>
+  {% if b.answers %}<h3>Their booking answers</h3><ul>{% for a in b.answers %}<li><strong>{{ a.q }}:</strong> {{ a.a }}</li>{% endfor %}</ul>{% endif %}
+  {% if b.last_notes %}<h3>Your notes from last time</h3><p>{{ b.last_notes }}</p>{% endif %}
+  {% for r in b.recaps %}<h3>Recap: {{ r.title }}</h3><p>{{ r.summary }}</p>{% if r.action_items %}<ul>{% for a in r.action_items %}<li>{{ a }}</li>{% endfor %}</ul>{% endif %}{% endfor %}
+  {% endif %}
+  <p class="help">Built only from meetings you host, workspace contacts and your own recaps.</p>
+</div>
+{% if proposal.draft and req.status in ('draft', 'approved') %}
+<div class="card">
+  <h2>Optional agenda email</h2>
+  <form method="post" action="/app/assistant/{{ req.id }}/approve">
+    {{ csrf_input(request) }}<input type="hidden" name="action" value="send">
+    <div class="field"><label for="to">To</label><input id="to" type="email" name="to" value="{{ proposal.draft.to or '' }}" required></div>
+    <div class="field"><label for="subject">Subject</label><input id="subject" type="text" name="subject" value="{{ proposal.draft.subject }}"></div>
+    <div class="field"><span class="muted">Preview</span><div class="card" style="box-shadow:none">{{ proposal.draft.html|safe }}</div></div>
+    <label class="check"><input type="checkbox" name="confirm" value="yes" required> I reviewed this email and want to send it</label>
+    <div class="row mt"><button class="btn btn-primary" type="submit">Approve &amp; send</button></div>
+  </form>
+  <form method="post" action="/app/assistant/{{ req.id }}/reject" class="mt">{{ csrf_input(request) }}<button class="btn btn-danger" type="submit">Dismiss</button></form>
+</div>
+{% endif %}
+{% if req.status == 'executed' and proposal.draft %}<div class="alert alert-success mt">Agenda email sent {{ req.executed_at|dt(user.default_timezone) }}.</div>{% endif %}
+{% elif proposal.history %}
+<div class="card">
+  <div class="card-head"><h2>Answer</h2></div>
+  <p><strong>{{ proposal.history.answer }}</strong></p>
+  {% if proposal.history.rows %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>When</th><th>Event</th><th>Invitee</th></tr></thead>
+    <tbody>{% for r in proposal.history.rows %}<tr><td>{{ r.when }}</td><td>{{ r.event }}</td><td>{{ r.invitee }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+  <p class="help">Answered only from meetings you host in this workspace.</p>
+</div>
+{% else %}
+  {% for w in proposal.warnings or [] %}<div class="alert alert-warning">{{ w }}</div>{% endfor %}
+  {% if proposal.event_type %}
+  <div class="card">
+    <div class="card-head"><h2>Suggested times</h2><span class="muted">{{ proposal.event_type.name }} &middot; {{ proposal.event_type.duration }} min &middot; times in {{ user.default_timezone }}</span></div>
+    {% if proposal.slots %}
+      <ul>{% for s in proposal.slots %}<li>{{ s.label }}</li>{% endfor %}</ul>
+    {% else %}<div class="empty">No free times found in that range.</div>{% endif %}
+    <p class="help">Times come from your live availability, including buffers and booking limits.</p>
+  </div>
+
+  {% if req.status in ('draft', 'approved') %}
+  <div class="grid grid-2 mt">
+    <div class="card">
+      <h2>Draft email</h2>
+      <form method="post" action="/app/assistant/{{ req.id }}/approve">
+        {{ csrf_input(request) }}<input type="hidden" name="action" value="send">
+        <div class="field"><label for="to">To</label><input id="to" type="email" name="to" value="{{ proposal.draft.to or '' }}" required></div>
+        {% if proposal.reply_to_thread %}<div class="field"><label for="cc">Cc</label><input id="cc" type="text" name="cc" value="{{ (proposal.draft.cc or [])|join(', ') }}"></div>{% endif %}
+        <div class="field"><label for="subject">Subject</label><input id="subject" type="text" name="subject" value="{{ proposal.draft.subject }}"></div>
+        <div class="field"><span class="muted">Preview</span><div class="card" style="box-shadow:none">{{ proposal.draft.html|safe }}</div>
+          <p class="help">Booking link: <a href="{{ proposal.booking_link }}" target="_blank" rel="noopener">{{ proposal.booking_link }}</a> <button type="button" class="btn btn-sm btn-ghost" data-copy="{{ proposal.booking_link }}">Copy</button></p></div>
+        <label class="check"><input type="checkbox" name="confirm" value="yes" required> I reviewed this email and want to send it</label>
+        <div class="row mt"><button class="btn btn-primary" type="submit">Approve &amp; send</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Or book directly</h2>
+      {% if proposal.slots %}
+      <form method="post" action="/app/assistant/{{ req.id }}/approve">
+        {{ csrf_input(request) }}<input type="hidden" name="action" value="book">
+        <fieldset style="border:0;padding:0;margin:0"><legend class="sr-only">Time</legend>
+        {% for s in proposal.slots %}
+          <label class="check"><input type="radio" name="slot_start" value="{{ s.start }}" {{ 'checked' if loop.first }}> {{ s.label }}</label>
+        {% endfor %}
+        </fieldset>
+        <div class="field mt"><label for="bto">Participant email</label><input id="bto" type="email" name="to" value="{{ (parsed.participant or {}).email or '' }}" required></div>
+        <label class="check"><input type="checkbox" name="confirm" value="yes" required> Book this meeting and send invitations</label>
+        <div class="row mt"><button class="btn btn-primary" type="submit">Approve &amp; book</button></div>
+      </form>
+      {% else %}<p class="muted">No times to book.</p>{% endif %}
+    </div>
+  </div>
+  <form method="post" action="/app/assistant/{{ req.id }}/reject" class="mt">{{ csrf_input(request) }}<button class="btn btn-danger" type="submit">Reject suggestion</button></form>
+  {% endif %}
+  {% endif %}
+  {% if req.status == 'executed' %}<div class="alert alert-success mt">Executed {{ req.executed_at|dt(user.default_timezone) }}.{% if proposal.booking_id %} Booking {{ proposal.booking_id }}.{% endif %}</div>{% endif %}
+  {% if req.status == 'rejected' %}<div class="alert alert-info mt">Rejected &mdash; nothing was sent.</div>{% endif %}
+{% endif %}
+{% endblock %}

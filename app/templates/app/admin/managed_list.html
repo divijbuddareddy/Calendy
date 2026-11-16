@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Managed events{% endblock %}
+{% block content %}
+{% include "app/admin/_tabs.html" %}
+<div class="grid grid-2">
+  <section class="card">
+    <h2>Managed templates</h2>
+    <p class="muted">Admins define shared event types once, lock the sections that must stay consistent, then assign them to members.</p>
+    {% if templates_ %}
+    <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Template</th><th>Locked</th><th>Assigned</th></tr></thead>
+      <tbody>
+      {% for t in templates_ %}
+        <tr>
+          <td><a href="/app/admin/managed-events/{{ t.id }}"><strong>{{ t.name }}</strong></a><br><span class="muted">{{ t.duration }} min · v{{ t.version }}</span></td>
+          <td>{% for k in t.locked_fields_json or [] %}<span class="badge">{{ sections[k][0] if k in sections else k }}</span> {% else %}<span class="muted">None</span>{% endfor %}</td>
+          <td>{{ child_counts.get(t.id, 0) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}<div class="empty">No managed templates yet.</div>{% endif %}
+  </section>
+  <form class="card" method="post" action="/app/admin/managed-events">
+    {{ csrf_input(request) }}
+    <h2>New template</h2>
+    
+    {% include "app/admin/_managed_fields.html" %}
+    <button class="btn btn-primary" type="submit">Create template</button>
+  </form>
+</div>
+{% endblock %}

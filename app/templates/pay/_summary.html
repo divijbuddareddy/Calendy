@@ -1,0 +1,11 @@
+<div class="booking-info">
+  {% if host %}<p class="muted" style="margin-bottom:4px">{{ host.name }}</p>{% endif %}
+  <h2 style="margin-bottom:12px">{{ event_type.name if event_type else 'Meeting' }}</h2>
+  <div class="stack">
+    <div class="meta-line">🗓 {{ booking.start_at|dt(tz) }}</div>
+    <div class="meta-line">⏱ {{ ((booking.end_at - booking.start_at).total_seconds() // 60)|int }} min</div>
+    <div class="meta-line">🌐 {{ tz }}</div>
+    {% if amount %}<div class="meta-line"><strong style="font-size:1.25rem">{{ amount|money(currency) }}</strong> <span class="muted">{{ currency }}</span></div>{% endif %}
+    {% if event_type and event_type.payment_description %}<p class="muted">{{ event_type.payment_description }}</p>{% endif %}
+  </div>
+</div>

@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Event types{% endblock %}
+{% block head %}
+<style>
+  .et-grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); }
+  .et-card { display:flex; flex-direction:column; gap:10px; }
+  .et-card .et-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:auto; padding-top:10px; border-top:1px solid var(--border); }
+  .et-card form { margin:0; }
+  .et-card.is-paused { opacity:.78; }
+  dialog.modal { border:1px solid var(--border); border-radius:var(--radius); padding:0; max-width:680px; width:94vw; background:var(--surface); color:var(--text); box-shadow:var(--shadow-lg); }
+  dialog.modal::backdrop { background:rgba(15,18,32,.45); }
+  .modal-body { padding:20px; }
+  .modal-head { display:flex; justify-content:space-between; align-items:center; padding:14px 20px; border-bottom:1px solid var(--border); }
+  .snippet { position:relative; }
+  .snippet pre { margin:6px 0 14px; max-height:160px; }
+</style>
+{% endblock %}
+{% block content %}
+{% if not host_public %}
+<div class="alert alert-warning spread">
+  <span><strong>Verify your email</strong> — your booking links won't accept bookings until you confirm {{ user.email }}.</span>
+  <form method="post" action="/verify-email/resend" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm">Resend email</button></form>
+</div>
+{% endif %}
+<div class="page-head">
+  <div>
+    <h1>Event types</h1>
+    <p class="muted" style="margin:0">Reusable booking templates. Share a link and let people pick a time.
+      {% if cap %}<span class="badge badge-warning">{{ active_count }}/{{ cap }} active on {{ plan_of(workspace).label }}</span>{% endif %}</p>
+  </div>
+  <div class="row">
+    {% if has_feature(workspace, 'one_off') %}<a class="btn" href="/app/event-types/one-off/new">One-off meeting</a>{% endif %}
+    {% if ctx.role != 'viewer' %}<a class="btn btn-primary" href="/app/event-types/new">+ New event type</a>{% endif %}
+  </div>
+</div>
+
+<div class="tabs" role="tablist">
+  <a href="/app/event-types" class="{{ 'active' if tab != 'archived' }}">Active &amp; paused</a>
+  <a href="/app/event-types?tab=archived" class="{{ 'active' if tab == 'archived' }}">Archived{% if archived_count %} ({{ archived_count }}){% endif %}</a>
+</div>
+
+{% if not events %}
+  <div class="card empty">
+    {% if tab == 'archived' %}<p>No archived event types.</p>
+    {% else %}
+    <h3>Create your first event type</h3>
+    <p>Set a duration, location and availability, then share the link.</p>
+    <a class="btn btn-primary" href="/app/event-types/new">+ New event type</a>
+    {% endif %}
+  </div>
+{% else %}
+<div class="et-grid">
+  {% for e in events %}
+  <div class="card event-card et-card {{ 'is-paused' if e.status != 'active' }}" style="border-top-color: {{ e.color }}">
+    <div class="spread">
+      <h3 style="margin:0">{{ e.name }}</h3>
+      {% if e.status == 'active' %}<span class="badge badge-success">Active</span>
+      {% elif e.status == 'paused' %}<span class="badge badge-warning">Paused</span>
+      {% else %}<span class="badge">Archived</span>{% endif %}
+    </div>
+    <div class="muted" style="font-size:.88rem">
+      {{ e.durations_json|join(' / ') ~ ' min' if e.durations_json else e.duration ~ ' min' }} · {{ kinds[e.kind] }}
+      {% if e.visibility != 'public' %}· <span class="badge">{{ e.visibility|capitalize }}</span>{% endif %}
+      {% if e.price_minor %}· {{ e.price_minor|money(e.currency) }}{% endif %}
+      {% if e.locked_fields_json %}· <span class="badge badge-primary" title="Managed by admin">Managed</span>{% endif %}
+    </div>
+    <div class="muted" style="font-size:.82rem">
+      {% if owners.get(e.owner_user_id) and e.owner_user_id != user.id %}Owner: {{ owners[e.owner_user_id].name }} · {% endif %}
+      {{ upcoming_counts.get(e.id, 0) }} upcoming
+    </div>
+    <code style="font-size:.78rem;word-break:break-all" class="muted">{{ urls[e.id] }}</code>
+    <div class="et-actions">
+      <button class="btn btn-sm" data-copy="{{ urls[e.id] }}">Copy link</button>
+      <a class="btn btn-sm" href="{{ urls[e.id] }}" target="_blank" rel="noopener">Preview ↗</a>
+      <button class="btn btn-sm" type="button" onclick="document.getElementById('embed-{{ e.id }}').showModal()">Embed</button>
+      {% if can_edit(e) %}
+      <a class="btn btn-sm" href="/app/event-types/{{ e.id }}/edit">Edit</a>
+      <details style="position:relative">
+        <summary class="btn btn-sm" style="list-style:none">More ▾</summary>
+        <div class="card" style="position:absolute;z-index:10;right:0;min-width:200px;padding:8px;display:flex;flex-direction:column;gap:6px">
+          <form method="post" action="/app/event-types/{{ e.id }}/duplicate">{{ csrf_input(request) }}<button class="btn btn-sm btn-block">Duplicate</button></form>
+          {% if has_feature(workspace, 'single_use') and e.status == 'active' %}
+          <form method="post" action="/app/event-types/{{ e.id }}/single-use">{{ csrf_input(request) }}<button class="btn btn-sm btn-block">Create single-use link</button></form>
+          {% endif %}
+          <form method="post" action="/app/event-types/{{ e.id }}/status">{{ csrf_input(request) }}
+            {% if e.status == 'active' %}<input type="hidden" name="action" value="pause"><button class="btn btn-sm btn-block">Pause</button>
+            {% else %}<input type="hidden" name="action" value="activate"><button class="btn btn-sm btn-block">Activate</button>{% endif %}
+          </form>
+          {% if e.status != 'archived' %}
+          <form method="post" action="/app/event-types/{{ e.id }}/status">{{ csrf_input(request) }}<input type="hidden" name="action" value="archive"><button class="btn btn-sm btn-block">Archive</button></form>
+          {% endif %}
+          <form method="post" action="/app/event-types/{{ e.id }}/delete">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger btn-block" data-confirm="Delete “{{ e.name }}”? Existing bookings are kept.">Delete</button></form>
+        </div>
+      </details>
+      {% endif %}
+    </div>
+  </div>
+  <dialog class="modal" id="embed-{{ e.id }}" aria-labelledby="embed-title-{{ e.id }}">
+    <div class="modal-head"><h3 id="embed-title-{{ e.id }}" style="margin:0">Embed “{{ e.name }}”</h3>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="this.closest('dialog').close()" aria-label="Close">✕</button></div>
+    <div class="modal-body">
+      {% set s = snippets[e.id] %}
+      <div class="snippet"><div class="spread"><strong>Inline embed</strong><button class="btn btn-sm" data-copy="{{ s.inline }}">Copy code</button></div>
+        <p class="help">Shows the booking page directly inside your web page.</p><pre>{{ s.inline }}</pre></div>
+      <div class="snippet"><div class="spread"><strong>Popup widget</strong><button class="btn btn-sm" data-copy="{{ s.popup_widget }}">Copy code</button></div>
+        <p class="help">A floating button that opens the booking page in a popup.</p><pre>{{ s.popup_widget }}</pre></div>
+      <div class="snippet"><div class="spread"><strong>Popup text link</strong><button class="btn btn-sm" data-copy="{{ s.popup_text }}">Copy code</button></div>
+        <p class="help">A text link that opens the booking page in a popup.</p><pre>{{ s.popup_text }}</pre></div>
+    </div>
+  </dialog>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2 class="mt" id="one-off" style="margin-top:32px">One-off meetings</h2>
+<div class="card">
+  {% if one_offs %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Meeting</th><th>Times offered</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for e in one_offs %}
+      <tr>
+        <td><strong>{{ e.name }}</strong><div class="muted">{{ e.duration }} min</div></td>
+        <td>{% for s in (e.one_off_slots_json or [])[:4] %}<div>{{ s|dt(user.default_timezone, '%a %d %b %Y, %H:%M') }}</div>{% endfor %}
+            {% if (e.one_off_slots_json or [])|length > 4 %}<div class="muted">+{{ e.one_off_slots_json|length - 4 }} more</div>{% endif %}</td>
+        <td>{% if e.status == 'active' %}<span class="badge badge-success">Open</span>{% else %}<span class="badge">{{ e.status|capitalize }}</span>{% endif %}</td>
+        <td class="row" style="justify-content:flex-end">
+          <button class="btn btn-sm" data-copy="{{ urls[e.id] }}">Copy link</button>
+          <a class="btn btn-sm" href="{{ urls[e.id] }}" target="_blank" rel="noopener">Preview</a>
+          {% if can_edit(e) %}<form method="post" action="/app/event-types/{{ e.id }}/delete" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" data-confirm="Delete this one-off meeting?">Delete</button></form>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% else %}
+    <p class="muted" style="margin:0">Offer a few specific times for a single meeting. {% if has_feature(workspace, 'one_off') %}<a href="/app/event-types/one-off/new">Create a one-off meeting →</a>{% else %}<span class="badge">Upgrade to unlock</span>{% endif %}</p>
+  {% endif %}
+</div>
+
+<h2 id="single-use" style="margin-top:32px">Single-use links</h2>
+<div class="card">
+  {% if single_use %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Based on</th><th>Link</th><th>Status</th><th>Created</th><th></th></tr></thead>
+    <tbody>
+    {% for e in single_use|reverse %}
+      <tr>
+        <td>{{ e.name }}</td>
+        <td><code style="font-size:.8rem">{{ urls[e.id] }}</code></td>
+        <td>{% if e.used_at %}<span class="badge">Used {{ e.used_at|dt(user.default_timezone, '%d %b') }}</span>{% elif e.status != 'active' %}<span class="badge">Disabled</span>{% else %}<span class="badge badge-success">Unused</span>{% endif %}</td>
+        <td class="muted">{{ e.created_at|dt(user.default_timezone, '%d %b %Y') }}</td>
+        <td class="row" style="justify-content:flex-end">
+          {% if not e.used_at %}<button class="btn btn-sm" data-copy="{{ urls[e.id] }}">Copy</button>{% endif %}
+          {% if can_edit(e) %}<form method="post" action="/app/event-types/{{ e.id }}/delete" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" data-confirm="Revoke this link?">Revoke</button></form>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% else %}
+    <p class="muted" style="margin:0">Generate a link that can be booked exactly once — use “More ▾ → Create single-use link” on any active event type.</p>
+  {% endif %}
+</div>
+{% endblock %}

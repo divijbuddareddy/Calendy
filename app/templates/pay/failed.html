@@ -1,0 +1,23 @@
+{% extends "public_base.html" %}
+{% block title %}Payment not completed{% endblock %}
+{% block content %}
+<div class="public-wrap">
+  <div class="booking-card">
+    {% include "pay/_summary.html" %}
+    <div class="booking-main">
+      {% if record and record.status in ('refunded', 'refund_pending') %}
+        <h1>We couldn't confirm your booking</h1>
+        <div class="alert alert-warning">Your payment went through, but this time was no longer available. {% if record.status == 'refunded' %}Your payment has been refunded automatically{% else %}The host has been alerted and will refund your payment{% endif %}.</div>
+      {% elif expired_hold %}
+        <h1>Your reservation expired</h1>
+        <div class="alert alert-warning">The time was held for a few minutes while you checked out and the hold has now expired. No payment was taken.</div>
+      {% else %}
+        <h1>Payment not completed</h1>
+        <div class="alert alert-error">Your payment didn't go through, so the meeting was not booked and the time slot has been released. You haven't been charged.</div>
+      {% endif %}
+      <p>You can choose a time again and retry payment.</p>
+      <a class="btn btn-primary" href="{{ rebook_url }}">Choose a time again</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

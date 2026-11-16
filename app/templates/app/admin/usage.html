@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Usage{% endblock %}
+{% block content %}
+{% include "app/admin/_tabs.html" %}
+<section class="card">
+  <h2>Usage meters</h2>
+  {% if meters %}
+  <table class="table"><thead><tr><th>Meter</th><th>Last 30 days</th><th style="width:40%"><span class="sr-only">Relative usage</span></th><th>All time</th></tr></thead>
+  <tbody>{% for m in meters %}
+    <tr><td><code>{{ m.meter }}</code></td><td>{{ m.last30 }}</td>
+      <td><div class="bar-track" role="img" aria-label="{{ m.meter }} {{ m.last30 }}"><div class="bar" style="width: {{ m.pct }}%"></div></div></td>
+      <td>{{ m.total }}</td></tr>
+  {% endfor %}</tbody></table>
+  {% else %}<p class="empty">No metered usage recorded yet.</p>{% endif %}
+</section>
+<section class="card">
+  <h2>Recent usage events</h2>
+  {% if recent %}
+  <table class="table"><thead><tr><th>When</th><th>Meter</th><th>Qty</th></tr></thead><tbody>
+    {% for u in recent %}<tr><td>{{ u.occurred_at | dt(user.default_timezone) }}</td><td><code>{{ u.meter }}</code></td><td>{{ u.quantity }}</td></tr>{% endfor %}
+  </tbody></table>
+  {% else %}<p class="empty">Nothing yet.</p>{% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}New event type{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><a href="/app/event-types" class="muted">← Event types</a><h1 style="margin-top:6px">New event type</h1></div>
+</div>
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+<form method="post" action="/app/event-types" class="card" style="max-width:720px">
+  {% if form.team_id %}<input type="hidden" name="team_id" value="{{ form.team_id }}"><div class="alert alert-info">This event type will belong to the selected team.</div>{% endif %}
+  {{ csrf_input(request) }}
+  <fieldset style="border:0;padding:0;margin:0 0 14px">
+    <legend style="font-weight:600;font-size:.88rem;margin-bottom:8px">Event format</legend>
+    <div class="grid grid-2">
+      {% for k, label in kinds.items() %}
+      {% set allowed = (k not in kind_feature) or has_feature(workspace, kind_feature[k]) %}
+      <label class="card check" style="margin:0;padding:12px;{{ 'opacity:.55' if not allowed }}">
+        <input type="radio" name="kind" value="{{ k }}" {{ 'checked' if (form.kind or kind) == k }} {{ 'disabled' if not allowed }}>
+        <span><strong>{{ label }}</strong><br><span class="muted" style="font-size:.8rem">
+          {% if k == 'one_on_one' %}One host, one invitee{% elif k == 'group' %}One host, many invitees in one slot{% elif k == 'collective' %}Several hosts, all must be free{% else %}Rotate invitees across hosts{% endif %}
+          {% if not allowed %} · Upgrade{% endif %}</span></span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  <div class="grid grid-2">
+    <div class="field"><label for="name">Name</label><input id="name" name="name" required value="{{ form.name or '' }}" placeholder="30 minute meeting" autofocus></div>
+    <div class="field"><label for="slug">URL slug <span class="muted">(optional)</span></label><input id="slug" name="slug" value="{{ form.slug or '' }}" placeholder="30min">
+      <div class="help">{{ base_url }}/{{ user.slug }}/<span id="slug-preview">{{ form.slug or '…' }}</span></div></div>
+  </div>
+  <div class="grid grid-2">
+    <div class="field"><label for="duration">Duration (minutes)</label>
+      <select id="duration" name="duration">{% for d in [15, 20, 30, 45, 60, 90, 120] %}<option value="{{ d }}" {{ 'selected' if (form.duration or '30')|string == d|string }}>{{ d }} min</option>{% endfor %}</select></div>
+    <div class="field"><label for="color">Colour</label><input type="color" id="color" name="color" value="{{ form.color or '#3b47d6' }}"></div>
+  </div>
+  <div class="grid grid-2">
+    <div class="field"><label for="location">Location</label>
+      <select id="location" name="location">{% for k, v in location_types.items() %}<option value="{{ k }}" {{ 'selected' if form.location == k }}>{{ v }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="location_value">Location details <span class="muted">(address / link / phone)</span></label><input id="location_value" name="location_value" value="{{ form.location_value or '' }}"></div>
+  </div>
+  <div class="field"><label for="description">Description</label><textarea id="description" name="description" placeholder="What will you discuss?">{{ form.description or '' }}</textarea></div>
+  <div class="row"><button class="btn btn-primary" type="submit">Create event type</button><a class="btn btn-ghost" href="/app/event-types">Cancel</a></div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+  const n = document.getElementById('name'), s = document.getElementById('slug'), p = document.getElementById('slug-preview');
+  const slugify = v => v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const upd = () => { p.textContent = s.value ? slugify(s.value) : (slugify(n.value) || '…'); };
+  n.addEventListener('input', upd); s.addEventListener('input', upd);
+</script>
+{% endblock %}

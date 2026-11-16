@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Integrations{% endblock %}
+{% block content %}
+{% include "app/integrations/_tabs.html" %}
+
+{% set broken = rows|selectattr('conn.status', 'ne', 'connected')|list %}
+{% if broken %}
+<div class="alert alert-error" role="alert">
+  <strong>Action required:</strong> {{ broken|length }} calendar connection{{ 's' if broken|length > 1 }} need{{ 's' if broken|length == 1 }} reconnecting.
+  Your booking pages won't offer times until availability can be verified again.
+</div>
+{% endif %}
+{% if failed_events %}<div class="alert alert-warning">{{ failed_events }} booking event{{ 's' if failed_events > 1 }} could not be written to your calendar yet. We retry automatically; use “Sync now” after fixing the connection.</div>{% endif %}
+
+<section class="card" aria-labelledby="cal-h">
+  <div class="card-head">
+    <div>
+      <h2 id="cal-h" style="margin:0">Calendars</h2>
+      <p class="muted" style="margin:0">We check the calendars you select for conflicts and add new bookings to one destination calendar. We never ask for your calendar password.</p>
+    </div>
+  </div>
+
+  <div class="grid grid-3 mt">
+    <div class="card" style="box-shadow:none">
+      <h3>Google Calendar</h3>
+      <p class="muted">Free/busy, events with Google Meet links, push sync.</p>
+      {% if google_configured %}<a class="btn btn-primary btn-sm" href="/app/integrations/google/connect">Connect Google</a>
+      {% else %}<span class="badge">Not configured on this server</span>{% endif %}
+    </div>
+    <div class="card" style="box-shadow:none">
+      <h3>Microsoft 365 / Outlook</h3>
+      <p class="muted">Calendars, free/busy, Teams meeting links, delta sync.</p>
+      {% if microsoft_configured %}<a class="btn btn-primary btn-sm" href="/app/integrations/microsoft/connect">Connect Microsoft</a>
+      {% else %}<span class="badge">Not configured on this server</span>{% endif %}
+    </div>
+    <div class="card" style="box-shadow:none">
+      <h3>Demo calendar</h3>
+      <p class="muted">Fully working offline calendar. Add busy events, simulate token expiry and external changes.</p>
+      <form method="post" action="/app/integrations/mock/connect">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Connect demo calendar</button></form>
+    </div>
+  </div>
+
+  {% if rows %}
+  <form method="post" action="/app/integrations/calendars" class="mt">
+    {{ csrf_input(request) }}
+    {% for r in rows %}
+    {% set c = r.conn %}
+    <div class="card mt" style="box-shadow:none">
+      <div class="spread">
+        <div>
+          <strong>{{ r.label }}</strong> <span class="muted">{{ c.account_email or '' }}</span>
+          {% if c.status == 'connected' %}<span class="badge badge-success">Connected</span>
+          {% else %}<span class="badge badge-danger">Reconnect required</span>{% endif %}
+        </div>
+        <div class="row">
+          {% if c.provider == 'mock' %}<a class="btn btn-sm" href="/app/integrations/connections/{{ c.id }}/events">Manage events ({{ r.busy_count }})</a>{% endif %}
+        </div>
+      </div>
+      <div class="muted" style="font-size:.85rem;margin-top:6px">
+        Last sync: {{ c.last_synced_at|dt(user.default_timezone) if c.last_synced_at else 'never' }}
+        · Permissions: {% for s in r.scopes %}<code>{{ s.split('/')[-1] }}</code>{% if not loop.last %}, {% endif %}{% else %}–{% endfor %}
+      </div>
+      {% if c.last_error %}<div class="alert alert-{{ 'error' if c.status != 'connected' else 'warning' }} mt" style="margin-bottom:0">{{ c.last_error }}</div>{% endif %}
+      <div class="table-wrap mt">
+        <table class="table">
+          <thead><tr><th>Calendar</th><th>Check for conflicts</th><th>Add new bookings here</th></tr></thead>
+          <tbody>
+          {% for cal in r.cals %}
+            <tr>
+              <td>{{ cal.display_name }}</td>
+              <td><label class="check"><input type="checkbox" name="conflict" value="{{ cal.id }}" {{ 'checked' if cal.is_conflict_calendar }}> <span class="sr-only">Check {{ cal.display_name }} for conflicts</span>Busy times block availability</label></td>
+              <td><label class="check"><input type="radio" name="write_calendar" value="{{ cal.id }}" {{ 'checked' if cal.is_write_calendar }}> Destination</label></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="3" class="muted">No calendars found for this account.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+    <div class="row mt">
+      <button class="btn btn-primary" type="submit">Save calendar settings</button>
+      <label class="check"><input type="radio" name="write_calendar" value=""> Don't add bookings to any calendar (email .ics only)</label>
+    </div>
+  </form>
+
+  {% for r in rows %}{% set c = r.conn %}
+  <div class="row mt" style="gap:6px">
+    <span class="muted" style="min-width:180px">{{ r.label }}{% if c.account_email %} · {{ c.account_email }}{% endif %}:</span>
+    {% if c.status != 'connected' %}
+      <form method="post" action="/app/integrations/connections/{{ c.id }}/reconnect">{{ csrf_input(request) }}<button class="btn btn-sm btn-primary" type="submit">Reconnect</button></form>
+    {% else %}
+      <form method="post" action="/app/integrations/connections/{{ c.id }}/sync">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Sync now</button></form>
+      {% if c.provider == 'mock' %}<form method="post" action="/app/integrations/connections/{{ c.id }}/simulate-expiry">{{ csrf_input(request) }}<button class="btn btn-sm btn-ghost" type="submit">Simulate token expiry</button></form>{% endif %}
+    {% endif %}
+    <form method="post" action="/app/integrations/connections/{{ c.id }}/disconnect">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Disconnect {{ r.label }}?&#10;&#10;• Events on its calendars will no longer block your availability (risk of double bookings).&#10;• New bookings won't be added to it.&#10;• Existing calendar events are left in place.">Disconnect</button></form>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty">No calendars connected yet. Without a calendar, only bookings made in {{ app_name }} block your availability.</div>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="video-h">
+  <h2 id="video-h">Video conferencing</h2>
+  <p class="muted">Choose a video location on an event type and a unique link is created for every booking, updated on reschedule and deleted on cancellation. If a link can't be created the booking still succeeds and you're asked to send details manually.</p>
+  <div class="grid grid-3">
+    <div class="card" style="box-shadow:none">
+      <h3>Zoom</h3>
+      {% if zoom %}
+        <p>{% if zoom.status == 'connected' %}<span class="badge badge-success">Connected</span>{% else %}<span class="badge badge-danger">Reconnect required</span>{% endif %}
+        {% if is_mock_zoom %}<span class="badge badge-warning">Demo mode</span>{% endif %}</p>
+        <p class="muted" style="font-size:.85rem">{{ zoom.account_email or '' }}</p>
+        <form method="post" action="/app/integrations/connections/{{ zoom.id }}/disconnect">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" data-confirm="Disconnect Zoom? New Zoom bookings will fall back to 'host will provide details'." type="submit">Disconnect</button></form>
+      {% else %}
+        {% if zoom_configured %}<a class="btn btn-sm btn-primary" href="/app/integrations/zoom/connect">Connect Zoom</a>
+        {% else %}<form method="post" action="/app/integrations/zoom/connect-demo">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Connect Zoom (demo mode)</button></form>{% endif %}
+      {% endif %}
+    </div>
+    <div class="card" style="box-shadow:none">
+      <h3>Google Meet</h3>
+      <p class="muted">Generated through your Google Calendar destination calendar (conference data).{% if not google_configured %} In demo mode the demo calendar generates Meet-style links.{% endif %}</p>
+      {% set g = rows|selectattr('conn.provider', 'in', ['google', 'mock'])|list %}
+      {% if g %}<span class="badge badge-success">Available</span>{% else %}<span class="badge">Connect Google or demo calendar</span>{% endif %}
+    </div>
+    <div class="card" style="box-shadow:none">
+      <h3>Microsoft Teams</h3>
+      <p class="muted">Created via Microsoft Graph (online meeting on the calendar event).{% if not microsoft_configured %} Demo calendar generates Teams-style links.{% endif %}</p>
+      {% set m = rows|selectattr('conn.provider', 'in', ['microsoft', 'mock'])|list %}
+      {% if m %}<span class="badge badge-success">Available</span>{% else %}<span class="badge">Connect Microsoft or demo calendar</span>{% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="card" id="payments" aria-labelledby="pay-h">
+  <div class="card-head">
+    <div>
+      <h2 id="pay-h" style="margin:0">Payments</h2>
+      <p class="muted" style="margin:0">Collect payment before a booking is confirmed. Funds go directly to your Stripe/PayPal account; card data never touches {{ app_name }}.</p>
+    </div>
+    {% if not has_feature(workspace, 'payments') %}<span class="badge">Standard plan</span>{% endif %}
+  </div>
+  <div class="grid grid-2">
+    <div class="card" style="box-shadow:none">
+      <h3>Stripe</h3>
+      {% set sa = accounts|selectattr('provider', 'eq', 'stripe')|list %}
+      {% if sa %}{% for a in sa %}
+        <p><span class="badge {{ 'badge-success' if a.status == 'connected' else 'badge-warning' }}">{{ a.status|capitalize }}</span>
+        {% if '_mock_' in a.account_id %}<span class="badge badge-warning">Test mode</span>{% endif %} <code>{{ a.account_id }}</code></p>
+        <form method="post" action="/app/integrations/payments/{{ a.id }}/disconnect">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Disconnect Stripe? Paid event types can't accept new bookings until a provider is connected.">Disconnect</button></form>
+      {% endfor %}{% else %}
+        <form method="post" action="/app/integrations/stripe/connect">{{ csrf_input(request) }}<button class="btn btn-sm btn-primary" type="submit" {{ 'disabled' if not has_feature(workspace, 'payments') }}>{{ 'Connect with Stripe' if stripe_configured else 'Connect Stripe (test mode)' }}</button></form>
+      {% endif %}
+    </div>
+    <div class="card" style="box-shadow:none">
+      <h3>PayPal</h3>
+      {% set pa = accounts|selectattr('provider', 'eq', 'paypal')|list %}
+      {% if pa %}{% for a in pa %}
+        <p><span class="badge badge-success">Connected</span> {% if '_mock_' in a.account_id %}<span class="badge badge-warning">Test mode</span>{% endif %} <code>{{ a.account_id }}</code></p>
+        <form method="post" action="/app/integrations/payments/{{ a.id }}/disconnect">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit">Disconnect</button></form>
+      {% endfor %}{% else %}
+        <form method="post" action="/app/integrations/paypal/connect" class="row">{{ csrf_input(request) }}
+          {% if paypal_configured %}<input type="text" name="paypal_account" placeholder="PayPal merchant ID or email" aria-label="PayPal merchant ID or email" style="max-width:260px">{% endif %}
+          <button class="btn btn-sm btn-primary" type="submit" {{ 'disabled' if not has_feature(workspace, 'payments') }}>{{ 'Connect PayPal' if paypal_configured else 'Connect PayPal (test mode)' }}</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+  {% if payments %}
+  <h3 class="mt">Recent payments</h3>
+  <div class="row" style="gap:16px">
+    {% for cur, amt in revenue.gross_by_currency.items() %}<div class="stat"><div class="num">{{ amt|money(cur) }}</div><div class="lbl">Collected ({{ cur }})</div></div>{% endfor %}
+    {% for cur, amt in revenue.refunded_by_currency.items() %}<div class="stat"><div class="num">{{ amt|money(cur) }}</div><div class="lbl">Refunded ({{ cur }})</div></div>{% endfor %}
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Date</th><th>Amount</th><th>Provider</th><th>Status</th><th>Booking</th><th></th></tr></thead>
+      <tbody>
+      {% for p in payments %}
+        <tr>
+          <td>{{ p.created_at|dt(user.default_timezone) }}</td>
+          <td>{{ p.amount_minor|money(p.currency) }}</td>
+          <td>{{ p.provider }}</td>
+          <td><span class="badge {{ {'succeeded':'badge-success','failed':'badge-danger','refunded':'badge-warning','refund_pending':'badge-danger'}.get(p.status, '') }}">{{ p.status }}</span>{% if p.refund_status %} <span class="muted">refund: {{ p.refund_status }}</span>{% endif %}</td>
+          <td><a href="/app/scheduled/{{ p.booking_id }}">View</a></td>
+          <td>{% if p.status == 'succeeded' %}<form method="post" action="/app/payments/{{ p.booking_id }}/refund">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Refund {{ p.amount_minor|money(p.currency) }} through {{ p.provider }}?">Refund</button></form>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="ics-h">
+  <h2 id="ics-h">Calendar subscription feed (ICS)</h2>
+  <p class="muted">Subscribe to this private URL in Apple Calendar, Outlook or any app that supports ICS feeds to see your bookings. Every booking email also includes an .ics attachment.</p>
+  {% if feed_url %}
+  <div class="alert alert-warning" role="alert"><strong>Your private feed URL (shown once):</strong>
+    <div class="row mt"><input type="text" readonly value="{{ feed_url }}" aria-label="ICS feed URL" style="max-width:640px"><button class="btn btn-sm" data-copy="{{ feed_url }}">Copy</button></div>
+  </div>
+  {% endif %}
+  {% if feed and not feed.revoked_at %}
+  <p>Status: <span class="badge badge-success">Active</span> <span class="muted">URL ending …{{ feed.hint }} · created {{ feed.updated_at|dt(user.default_timezone) }}{% if feed.last_used_at %} · last fetched {{ feed.last_used_at|dt(user.default_timezone) }}{% endif %}</span></p>
+  <div class="row">
+    <form method="post" action="/app/integrations/ics-feed/regenerate">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit" data-confirm="Generate a new URL? The current URL stops working immediately.">Regenerate URL</button></form>
+    <form method="post" action="/app/integrations/ics-feed/revoke">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Disable the calendar feed? Subscribed apps will stop updating.">Disable feed</button></form>
+  </div>
+  {% else %}
+  <p>Status: <span class="badge">{{ 'Disabled' if feed else 'Not created' }}</span></p>
+  <form method="post" action="/app/integrations/ics-feed/regenerate">{{ csrf_input(request) }}<button class="btn btn-sm btn-primary" type="submit">Create feed URL</button></form>
+  {% endif %}
+  <p class="help">Keep this link private – anyone with it can see your meeting times. The URL is stored hashed, so it is only shown when created; regenerate it if it leaks.</p>
+</section>
+{% endblock %}

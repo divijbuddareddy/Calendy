@@ -1,0 +1,71 @@
+{% extends "public_base.html" %}
+{% block title %}{{ t('status.confirmed') if b.status == 'confirmed' else t('confirm.title_status') }}: {{ snap.name }}{% endblock %}
+{% block head %}{% include "public/_styles.html" %}{% endblock %}
+{% block content %}
+<div class="public-wrap narrow">
+  <div class="card" style="padding:28px">
+    {% if b.status == 'confirmed' %}
+      <div class="status-hero">
+        <div class="icon" aria-hidden="true">✅</div>
+        <h1>{{ t('confirm.scheduled') }}</h1>
+        <p class="muted">{{ t('confirm.invite_sent') }}</p>
+      </div>
+      {% if confirmation.message %}<div class="alert alert-info" style="white-space:pre-line">{{ confirmation.message }}</div>{% endif %}
+    {% elif b.status in ('pending', 'held') %}
+      <div class="status-hero">
+        <div class="icon" aria-hidden="true">⏳</div>
+        <h1>{{ t('confirm.pending') }}</h1>
+        <p class="muted">{{ t('confirm.pending_body') }} {{ t('confirm.not_confirmed_yet')|safe }}</p>
+      </div>
+    {% elif b.status == 'pending_payment' %}
+      <div class="status-hero">
+        <div class="icon" aria-hidden="true">💳</div>
+        <h1>{{ t('confirm.payment_required') }}</h1>
+        <p class="muted">{{ t('confirm.payment_body') }}</p>
+        <a class="btn btn-primary" href="/pay/{{ b.manage_token }}">{{ t('confirm.pay', amount=snap.price_minor|money(snap.currency)) }}</a>
+      </div>
+    {% elif b.status == 'cancelled' %}
+      <div class="status-hero"><div class="icon" aria-hidden="true">✖</div><h1>{{ t('confirm.was_cancelled') }}</h1></div>
+    {% elif b.status == 'rescheduled' %}
+      <div class="status-hero"><div class="icon" aria-hidden="true">↻</div><h1>{{ t('confirm.was_rescheduled') }}</h1>
+        <p class="muted"><a href="/booking/{{ b.manage_token }}">{{ t('confirm.view_updated') }}</a></p></div>
+    {% else %}
+      <div class="status-hero"><div class="icon" aria-hidden="true">⚠</div><h1>{{ t('confirm.failed') }}</h1>
+        <p class="muted">{{ t('confirm.reservation_expired') if b.status == 'expired' else t('confirm.reservation_failed') }}</p>
+        <a class="btn btn-primary" href="javascript:history.back()">{{ t('confirm.choose_another') }}</a></div>
+    {% endif %}
+
+    {% include "public/_summary.html" %}
+
+    {% if b.status == 'confirmed' %}
+      {% include "public/_calendar_links.html" %}
+      {% if confirmation.links %}
+      <hr class="divider">
+      <h3>{{ t('confirm.resources') }}</h3>
+      <ul>{% for l in confirmation.links %}{% if l.url and (l.url.startswith('http://') or l.url.startswith('https://')) %}<li><a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.label or l.url }}</a></li>{% endif %}{% endfor %}</ul>
+      {% endif %}
+      {% if embedded and confirmation.redirect_url %}<p class="mt"><a class="btn" href="{{ confirmation.redirect_url }}" target="_top">{{ t('confirm.continue') }}</a></p>{% endif %}
+    {% endif %}
+    {% if b.status in ('confirmed', 'pending', 'pending_payment', 'held') %}
+      <hr class="divider">
+      <p class="muted" style="margin:0">{{ t('confirm.need_change') }}
+        {% if policy.allow_reschedule != false and b.status == 'confirmed' %}<a href="/booking/{{ b.manage_token }}/reschedule{{ ('?' ~ embed_qs) if embedded }}">{{ t('manage.reschedule') }}</a> {{ t('common.or') }}{% endif %}
+        {% if policy.allow_cancel != false %}<a href="/booking/{{ b.manage_token }}/cancel{{ ('?' ~ embed_qs) if embedded }}">{{ t('manage.cancel') }}</a>{% endif %}
+        · <a href="/booking/{{ b.manage_token }}{{ ('?' ~ embed_qs) if embedded }}">{{ t('manage.manage_booking') }}</a></p>
+    {% endif %}
+  </div>
+</div>
+<script type="application/json" id="embed-message">{{ embed_message|tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var msg = JSON.parse(document.getElementById("embed-message").textContent);
+  if (window.parent && window.parent !== window &&
+      (msg.status === "confirmed" || msg.status === "pending" || msg.status === "pending_payment")) {
+    window.parent.postMessage(Object.assign({ type: "aal.event_scheduled" }, msg), "*");
+  }
+})();
+</script>
+<script src="/static/booking.js"></script>
+{% endblock %}

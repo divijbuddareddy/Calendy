@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}API keys{% endblock %}
+{% block content %}
+{% include "app/integrations/_tabs.html" %}
+
+{% if new_key %}
+<div class="alert alert-warning" role="alert">
+  <strong>Your new API key (shown once):</strong>
+  <div class="row mt"><code style="font-size:1rem;word-break:break-all">{{ new_key.key }}</code><button class="btn btn-sm" data-copy="{{ new_key.key }}">Copy</button></div>
+</div>
+{% endif %}
+
+<div class="grid grid-2">
+  <section class="card">
+    <h2>Create API key</h2>
+    <form method="post" action="/app/integrations/api-keys">
+      {{ csrf_input(request) }}
+      <div class="field"><label for="name">Name</label><input id="name" type="text" name="name" placeholder="e.g. CRM sync" required maxlength="200"></div>
+      <fieldset class="field" style="border:0;padding:0">
+        <legend style="font-weight:600;font-size:.88rem;margin-bottom:4px">Scopes</legend>
+        <label class="check"><input type="checkbox" name="scopes" value="read" checked> read – list event types, availability, bookings, contacts, analytics</label>
+        <label class="check"><input type="checkbox" name="scopes" value="write"> write – create/cancel/reschedule bookings, edit event types, webhooks</label>
+      </fieldset>
+      <button class="btn btn-primary" type="submit">Create key</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Using the API</h2>
+    <pre>curl {{ base_url }}/api/v1/me \
+  -H "Authorization: Bearer aal_sk_…"
+
+curl -X POST {{ base_url }}/api/v1/bookings \
+  -H "Authorization: Bearer aal_sk_…" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{"event_type_id":"evt_…","start_at":"2026-11-18T14:00:00Z",
+       "timezone":"Europe/London",
+       "invitee":{"name":"Alex","email":"alex@example.com"}}'</pre>
+    <p class="help">Keys are scoped to this workspace, stored hashed and rate limited per key, workspace and endpoint. List endpoints use cursor pagination (<code>?limit=&amp;cursor=</code>). See the <a href="/api/docs" target="_blank" rel="noopener">OpenAPI docs</a>.</p>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Keys</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Name</th><th>Prefix</th><th>Scopes</th><th>Created by</th><th>Last used</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for k in keys %}
+        <tr>
+          <td>{{ k.name }}</td>
+          <td><code>{{ k.prefix }}…</code></td>
+          <td>{% for s in k.scopes.split() %}<span class="badge">{{ s }}</span> {% endfor %}</td>
+          <td>{{ owners[k.user_id].name if k.user_id in owners else '' }}</td>
+          <td>{{ k.last_used_at|dt(user.default_timezone) if k.last_used_at else 'Never' }}</td>
+          <td>{% if k.revoked_at %}<span class="badge badge-danger">Revoked</span>{% else %}<span class="badge badge-success">Active</span>{% endif %}</td>
+          <td>{% if not k.revoked_at %}<form method="post" action="/app/integrations/api-keys/{{ k.id }}/revoke">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Revoke '{{ k.name }}'? Integrations using it will stop working immediately.">Revoke</button></form>{% endif %}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">No API keys yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

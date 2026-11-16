@@ -1,0 +1,13 @@
+{% set pfx = q.id if q else 'new' %}
+<div class="grid grid-2">
+  <div class="field"><label for="label-{{ pfx }}">Question</label><input id="label-{{ pfx }}" name="label" value="{{ q.label if q else '' }}" required {{ 'disabled' if locked('questions') }}></div>
+  <div class="field"><label for="type-{{ pfx }}">Answer type</label>
+    <select id="type-{{ pfx }}" name="type" {{ 'disabled' if locked('questions') }}>{% for k, v in question_types.items() %}<option value="{{ k }}" {{ 'selected' if q and q.type == k }}>{{ v }}</option>{% endfor %}</select></div>
+</div>
+<div class="grid grid-2">
+  <div class="field"><label for="help-{{ pfx }}">Help text</label><input id="help-{{ pfx }}" name="help_text" value="{{ q.help_text or '' if q else '' }}" {{ 'disabled' if locked('questions') }}></div>
+  <div class="field"><label for="prefill-{{ pfx }}">Prefill key <span class="muted">(URL param)</span></label><input id="prefill-{{ pfx }}" name="prefill_key" value="{{ q.prefill_key or '' if q else '' }}" placeholder="a1" {{ 'disabled' if locked('questions') }}></div>
+</div>
+<div class="field"><label for="options-{{ pfx }}">Options <span class="muted">(dropdown / radio / checkboxes — one per line)</span></label>
+  <textarea id="options-{{ pfx }}" name="options" style="min-height:70px" {{ 'disabled' if locked('questions') }}>{{ (q.options_json or [])|join('\n') if q else '' }}</textarea></div>
+<label class="check" style="margin-bottom:12px"><input type="checkbox" name="required" value="1" {{ 'checked' if q and q.required }} {{ 'disabled' if locked('questions') }}> Required</label>

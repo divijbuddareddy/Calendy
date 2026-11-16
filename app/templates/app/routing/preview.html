@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Test {{ rf.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="muted" style="margin:0"><a href="/app/routing/{{ rf.id }}">← Back to builder</a></p>
+    <h1>Preview &amp; test: {{ rf.name }}</h1>
+    <p class="muted">Test mode evaluates your rules without saving a submission, sending notifications or redirecting.</p>
+  </div>
+  <span class="badge badge-warning">Test mode</span>
+</div>
+<div class="grid grid-2">
+  <form class="card" method="post" action="/app/routing/{{ rf.id }}/preview">
+    {{ csrf_input(request) }}
+    {% include "routing_public/_fields.html" %}
+    <button class="btn btn-primary" type="submit">Evaluate</button>
+  </form>
+  <section class="card" aria-live="polite">
+    <h2>Result</h2>
+    {% if result %}
+      {% if errors %}<div class="alert alert-warning">Validation would block a real visitor: {{ errors|join(' ') }}</div>{% endif %}
+      <p><span class="muted">Matched:</span> {% if result.rule_id %}<span class="badge badge-success">{{ result.rule_name }}</span>{% else %}<span class="badge badge-warning">No rule matched — fallback</span>{% endif %}</p>
+      <p><span class="muted">Destination:</span> <strong>{{ result.dest_text }}</strong></p>
+      {% if result.resolved.kind == 'redirect' %}
+        <p><span class="muted">Visitor would be sent to:</span></p>
+        <pre>{{ result.resolved.url }}</pre>
+      {% else %}
+        <p><span class="muted">Visitor would see:</span></p>
+        <blockquote style="white-space:pre-line;border-left:3px solid var(--border);margin:0;padding-left:12px">{{ result.resolved.message }}</blockquote>
+      {% endif %}
+      <p class="help">Nothing was saved.</p>
+    {% else %}
+      <div class="empty">Fill in the form and press Evaluate to see which rule matches.</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

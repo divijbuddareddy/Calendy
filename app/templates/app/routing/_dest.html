@@ -1,0 +1,43 @@
+{# destination picker. expects prefix, cur (dict or None), dest_labels, events, teams, hosts #}
+{% set ct = cur.type if cur else 'event_type' %}{% set cv = cur.value if cur else '' %}
+<div class="field">
+  <label for="{{ prefix }}-type">Send visitor to</label>
+  <select id="{{ prefix }}-type" name="{{ prefix }}_type" data-dest-select="{{ prefix }}">
+    {% for k, v in dest_labels.items() %}{% if not (prefix == 'fb' and k == 'salesforce_lookup') %}<option value="{{ k }}" {{ 'selected' if ct == k or (k == 'salesforce_lookup' and ct == 'crm_lookup') }}>{{ v }}</option>{% endif %}{% endfor %}
+  </select>
+</div>
+<div class="field" data-dest-pane="{{ prefix }}:event_type">
+  <label for="{{ prefix }}-et">Event type</label>
+  <select id="{{ prefix }}-et" name="{{ prefix }}_event_type">
+    {% for e in events %}<option value="{{ e.id }}" {{ 'selected' if ct == 'event_type' and cv == e.id }}>{{ e.name }} ({{ e.duration }} min)</option>{% else %}<option value="">No active event types</option>{% endfor %}
+  </select>
+  <p class="help">Answers are prefilled using the form's <a href="#prefill">prefill mapping</a> (or matching labels when no mapping is set); the submission id is attached so conversions are tracked.</p>
+</div>
+<div class="field" data-dest-pane="{{ prefix }}:team">
+  <label for="{{ prefix }}-team">Team</label>
+  <select id="{{ prefix }}-team" name="{{ prefix }}_team">
+    {% for t in teams %}<option value="{{ t.id }}" {{ 'selected' if ct == 'team' and cv == t.id }}>{{ t.name }}</option>{% else %}<option value="">No teams</option>{% endfor %}
+  </select>
+</div>
+<div class="field" data-dest-pane="{{ prefix }}:host">
+  <label for="{{ prefix }}-host">Host</label>
+  <select id="{{ prefix }}-host" name="{{ prefix }}_host">
+    {% for h in hosts %}<option value="{{ h.id }}" {{ 'selected' if ct == 'host' and cv == h.id }}>{{ h.name or h.email }}</option>{% endfor %}
+  </select>
+</div>
+<div class="field" data-dest-pane="{{ prefix }}:url">
+  <label for="{{ prefix }}-url">External URL</label>
+  <input id="{{ prefix }}-url" type="url" name="{{ prefix }}_url" placeholder="https://example.com/thanks" value="{{ cv if ct == 'url' else '' }}">
+  <p class="help">Only http:// and https:// links are allowed.</p>
+</div>
+<div class="field" data-dest-pane="{{ prefix }}:message">
+  <label for="{{ prefix }}-msg">Message</label>
+  <textarea id="{{ prefix }}-msg" name="{{ prefix }}_message" rows="3">{{ cv if ct == 'message' else '' }}</textarea>
+</div>
+{% if prefix != 'fb' %}
+<div class="field" data-dest-pane="{{ prefix }}:salesforce_lookup">
+  <label for="{{ prefix }}-crm">Owner's event type slug (optional)</label>
+  <input id="{{ prefix }}-crm" type="text" name="{{ prefix }}_salesforce_lookup" placeholder="intro-call" pattern="[a-zA-Z0-9_-]*" value="{{ cv if ct in ('salesforce_lookup','crm_lookup') else '' }}">
+  <p class="help">Looks up the submitter's email in the connected CRM ({% if crm_conn %}{{ crm_conn.account_label or crm_conn.provider }}{% else %}<a href="/app/contacts/crm">connect a CRM</a>{% endif %}). If the Contact/Lead owner is an active member, the visitor goes to that owner's booking page (this event type, if they have it); otherwise to the fallback destination.</p>
+</div>
+{% endif %}

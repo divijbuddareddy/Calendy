@@ -1,0 +1,17 @@
+{% extends "public_base.html" %}
+{% block title %}Payment {{ 'received' if co.status == 'succeeded' else 'processing' }}{% endblock %}
+{% block content %}
+<div class="public-wrap" style="max-width:560px">
+  <div class="card" style="text-align:center;padding:36px">
+    {% if co.status == 'succeeded' %}
+    <h1>Payment received</h1>
+    <p class="muted">{{ co.amount_minor|money(co.currency) }} for {{ title }}.</p>
+    {% if co.kind == 'package' %}<p>Your redemption code has been emailed to <strong>{{ co.buyer_email }}</strong>. Use it on the payment step whenever you book a session.</p>
+    {% elif co.buyer_email %}<p>A receipt was sent to <strong>{{ co.buyer_email }}</strong>.</p>{% endif %}
+    {% else %}
+    <h1>Payment processing</h1>
+    <p class="muted">We're confirming your payment with the provider. Refresh this page in a moment, or close it – you'll get an email once it completes.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

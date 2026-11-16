@@ -1,0 +1,30 @@
+{% extends "public_base.html" %}
+{% block title %}Test checkout{% endblock %}
+{% block content %}
+<div class="public-wrap" style="max-width:520px">
+  <div class="card">
+    <div class="spread">
+      <strong>{{ (record.provider or 'stripe')|capitalize }} test checkout</strong>
+      <span class="badge badge-warning">Test mode</span>
+    </div>
+    <p class="muted mt">This is a simulated hosted checkout page used when no live payment provider is configured. No card details are collected and no money moves.</p>
+    <div class="card mt" style="box-shadow:none;background:var(--surface-2)">
+      <div class="spread"><span>{{ event_type.name if event_type else 'Meeting' }}{% if host %} with {{ host.name }}{% endif %}</span><strong>{{ record.amount_minor|money(record.currency) }}</strong></div>
+      <div class="muted" style="font-size:.85rem">{{ booking.start_at|dt(tz) }}</div>
+      <div class="muted" style="font-size:.85rem">Payment ref: <code>{{ record.provider_payment_id }}</code></div>
+    </div>
+    <div class="card mt" style="box-shadow:none">
+      <div class="row"><span class="badge">VISA</span> <span>Test card •••• 4242</span> <span class="muted">(simulated)</span></div>
+    </div>
+    <form method="post" class="mt stack">
+      {{ csrf_input(request) }}
+      <input type="hidden" name="record" value="{{ record.id }}">
+      <button class="btn btn-primary btn-block" name="outcome" value="success" type="submit">Pay {{ record.amount_minor|money(record.currency) }}</button>
+      <div class="row" style="justify-content:space-between">
+        <button class="btn btn-danger btn-sm" name="outcome" value="fail" type="submit">Simulate card decline</button>
+        <button class="btn btn-ghost btn-sm" name="outcome" value="cancel" type="submit">Cancel checkout</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Settings</h1><p class="muted" style="margin:0">Manage your profile, workspace and account.</p></div></div>
+<div class="tabs" role="tablist">
+  {% for k, label in tabs.items() %}<a href="?tab={{ k }}" class="{{ 'active' if tab == k }}" role="tab" aria-selected="{{ 'true' if tab == k else 'false' }}">{{ label }}</a>{% endfor %}
+</div>
+
+{% if tab == 'profile' %}
+<form method="post" action="/app/settings/profile" class="card" style="max-width:760px">{{ csrf_input(request) }}
+  <div class="row" style="margin-bottom:16px">
+    {% if user.avatar_url %}<img class="avatar" src="{{ user.avatar_url }}" alt="">{% else %}<span class="avatar">{{ (user.name or user.email)[:1]|upper }}</span>{% endif %}
+    <div><strong>{{ user.name }}</strong><div class="muted">{{ user.email }} {% if user.email_verified_at %}<span class="badge badge-success">Verified</span>{% else %}<span class="badge badge-warning">Unverified</span>{% endif %}</div></div>
+  </div>
+  <div class="grid grid-2">
+    <div class="field"><label for="name">Display name</label><input id="name" name="name" value="{{ user.name }}" required></div>
+    <div class="field"><label for="slug">Booking page URL</label><input id="slug" name="slug" value="{{ user.slug or '' }}" required pattern="[a-z0-9-]+">
+      <div class="help">{{ base_url }}/<strong>{{ user.slug }}</strong> — changing this breaks old links.</div></div>
+  </div>
+  <div class="field"><label for="headline">Headline / welcome message</label><input id="headline" name="headline" value="{{ user.headline or '' }}" placeholder="Founder at Acme — happy to chat!"></div>
+  <div class="field"><label for="avatar_url">Profile photo URL</label><input type="url" id="avatar_url" name="avatar_url" value="{{ user.avatar_url or '' }}" placeholder="https://…"></div>
+  <div class="grid grid-2">
+    <div class="field"><label for="timezone">Timezone</label><select id="timezone" name="timezone">{% for z in timezones %}<option value="{{ z }}" {{ 'selected' if z == user.default_timezone }}>{{ z|replace('_',' ') }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="locale">Language</label><select id="locale" name="locale">{% for k, v in locales.items() %}<option value="{{ k }}" {{ 'selected' if k == user.locale }}>{{ v }}</option>{% endfor %}</select></div>
+  </div>
+  <div class="grid grid-2">
+    <div class="field"><label for="work_start">Working hours start</label><input type="time" id="work_start" name="work_start" value="{{ wh.start or '' }}"></div>
+    <div class="field"><label for="work_end">Working hours end</label><input type="time" id="work_end" name="work_end" value="{{ wh.end or '' }}"></div>
+  </div>
+  <p class="help">Bookable hours are set per schedule in <a href="/app/availability">Availability</a>; working hours here are shown on your profile and used by the assistant.</p>
+  <button class="btn btn-primary">Save profile</button>
+</form>
+
+{% elif tab == 'branding' %}
+<form method="post" action="/app/settings/branding" class="card" style="max-width:640px">{{ csrf_input(request) }}
+  <div class="field"><label for="primary">Brand colour</label><input type="color" id="primary" name="primary" value="{{ branding.primary or '#3b47d6' }}" style="max-width:120px"><div class="help">Used for buttons and highlights on your booking pages.</div></div>
+  <div class="field"><label for="logo_url">Logo URL</label><input type="url" id="logo_url" name="logo_url" value="{{ branding.logo_url or '' }}" placeholder="https://…"></div>
+  <label class="check"><input type="checkbox" name="hide_branding" value="1" {{ 'checked' if branding.hide_branding }} {{ 'disabled' if not has_feature(workspace, 'custom_branding') }}> Hide “Scheduling by {{ app_name }}”
+    {% if not has_feature(workspace, 'custom_branding') %}<span class="badge">Standard plan</span>{% endif %}</label>
+  {% if ctx.can('admin') %}<label class="check mt"><input type="checkbox" name="apply_workspace" value="1"> Also apply to the whole workspace</label>{% endif %}
+  <div class="mt"><button class="btn btn-primary">Save branding</button></div>
+</form>
+
+{% elif tab == 'notifications' %}
+<form method="post" action="/app/settings/notifications" class="card" style="max-width:640px">{{ csrf_input(request) }}
+  <h2>Notifications</h2>
+  <div class="stack">
+  {% for key, label in notif_prefs %}
+    <label class="check"><input type="checkbox" name="{{ key }}" value="1" {{ 'checked' if prefs.get(key, key in ('new_booking_email','cancellation_email','in_app')) }}> {{ label }}</label>
+  {% endfor %}
+  </div>
+  <p class="help mt">Invitee confirmations and reminders are configured per event in <a href="/app/workflows">Workflows</a>.</p>
+  <button class="btn btn-primary">Save preferences</button>
+</form>
+
+{% elif tab == 'security' %}
+<form method="post" action="/app/settings/security/password" class="card" style="max-width:520px">{{ csrf_input(request) }}
+  <h2>{{ 'Change password' if user.password_hash else 'Set a password' }}</h2>
+  {% if user.password_hash %}<div class="field"><label for="cp">Current password</label><input type="password" id="cp" name="current_password" autocomplete="current-password" required></div>{% endif %}
+  <div class="field"><label for="np">New password</label><input type="password" id="np" name="new_password" autocomplete="new-password" minlength="8" required></div>
+  <div class="field"><label for="cf">Confirm new password</label><input type="password" id="cf" name="confirm_password" autocomplete="new-password" minlength="8" required></div>
+  <button class="btn btn-primary">Update password</button>
+</form>
+<div class="card" style="max-width:520px">
+  <h3>Sessions &amp; sign-in</h3>
+  <p class="muted">You're signed in on this browser. Sessions are stored in a signed, HTTP-only cookie, expire after {{ session_idle_days }} days of inactivity and at most {{ session_max_days }} days after sign-in. Changing your password signs you out everywhere else.</p>
+  <form method="post" action="/app/settings/security/sign-out-others" style="margin:0 0 12px">{{ csrf_input(request) }}<button class="btn btn-sm" data-confirm="Sign out of every other browser and device?">Sign out other sessions</button></form>
+  <p class="muted" style="margin:0">Google sign-in: {% if user.google_sub %}<span class="badge badge-success">Linked</span>{% else %}<span class="badge">Not linked</span>{% endif %}</p>
+</div>
+
+{% elif tab == 'workspace' %}
+<form method="post" action="/app/settings/workspace" class="card" style="max-width:640px">{{ csrf_input(request) }}
+  <h2>Workspace</h2>
+  <div class="field"><label for="wsn">Name</label><input id="wsn" name="name" value="{{ workspace.name }}" {{ 'disabled' if not ctx.can('admin') }} required></div>
+  <div class="field"><label for="wss">Slug</label><input id="wss" name="slug" value="{{ workspace.slug }}" {{ 'disabled' if not ctx.can('admin') }} required></div>
+  <p class="muted">Your role: <span class="badge badge-primary">{{ ctx.role|capitalize }}</span>. Manage members in <a href="/app/teams">Teams</a>.</p>
+  {% if ctx.can('admin') %}<button class="btn btn-primary">Save workspace</button>{% endif %}
+</form>
+{% if memberships|length > 1 %}
+<div class="card" style="max-width:640px">
+  <h3>Switch workspace</h3>
+  {% for m, w in memberships %}
+  <div class="spread" style="padding:8px 0;border-bottom:1px solid var(--border)">
+    <span>{{ w.name }} <span class="muted">· {{ m.role }}</span></span>
+    {% if w.id == workspace.id %}<span class="badge badge-success">Current</span>{% else %}
+    <form method="post" action="/app/settings/workspace/switch" style="margin:0">{{ csrf_input(request) }}<input type="hidden" name="workspace_id" value="{{ w.id }}"><button class="btn btn-sm">Switch</button></form>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% elif tab == 'billing' %}
+<div class="alert alert-info" role="status">Manage your subscription, seats, invoices and payment method on the <a href="/app/billing">Billing page</a>.</div>
+<div class="card">
+  <div class="spread"><div><h2 style="margin:0">Current plan: {{ plan.label }}</h2>
+    <p class="muted" style="margin:4px 0 0">{{ seats }} active seat{{ 's' if seats != 1 }}{% if sub %} · Subscription {{ sub.status }}{% if sub.period_end %} until {{ sub.period_end|dt(user.default_timezone, '%d %b %Y') }}{% endif %}{% endif %}</p></div>
+    {% if plan.price_minor %}<div class="stat" style="padding:0;text-align:right"><div class="num">{{ plan.price_minor|money('USD') }}</div><div class="lbl">per seat / month</div></div>{% endif %}</div>
+  <p class="help">Billing is manual in this release; the owner can switch plans below to change entitlements instantly.</p>
+</div>
+<div class="grid grid-4 mt">
+  {% for pid, p in plans.items() %}
+  <div class="card" style="{{ 'border-color:var(--primary);border-width:2px' if workspace.plan_id == pid }}">
+    <h3>{{ p.label }}</h3>
+    <div class="stat" style="padding:0"><div class="num" style="font-size:1.3rem">{% if p.price_minor is none %}Custom{% elif p.price_minor == 0 %}Free{% else %}{{ p.price_minor|money('USD') }}<span class="muted" style="font-size:.8rem">/seat/mo</span>{% endif %}</div></div>
+    <p class="muted" style="font-size:.85rem">{{ 'Unlimited' if p.max_active_event_types is none else p.max_active_event_types }} active event type{{ 's' if p.max_active_event_types != 1 }} · {{ 'Unlimited' if p.max_calendars is none else p.max_calendars }} calendar{{ 's' if p.max_calendars != 1 }}</p>
+    <details><summary class="muted" style="font-size:.85rem">{{ p.features|length }} features</summary>
+      <ul style="padding-left:18px;font-size:.82rem;margin:6px 0">{% for f in p.features|sort %}<li>{{ f|replace('_',' ') }}</li>{% endfor %}</ul></details>
+    {% if workspace.plan_id == pid %}<span class="badge badge-success mt">Current plan</span>
+    {% elif ctx.role == 'owner' %}
+    <form method="post" action="/app/settings/billing/plan" class="mt">{{ csrf_input(request) }}<input type="hidden" name="plan" value="{{ pid }}"><button class="btn btn-sm btn-block" data-confirm="Switch to {{ p.label }}?">Switch to {{ p.label }}</button></form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{% elif tab == 'data' %}
+<div class="card" style="max-width:760px">
+  <h2>Export your data</h2>
+  <p class="muted">Download a JSON file containing your profile, schedules, event types, hosted bookings and notifications.</p>
+  <form method="post" action="/app/settings/data/export">{{ csrf_input(request) }}<button class="btn btn-primary">Request data export</button></form>
+  {% if data_requests %}
+  <table class="table mt"><thead><tr><th>Request</th><th>Status</th><th>Date</th><th></th></tr></thead><tbody>
+    {% for r in data_requests %}<tr><td>{{ r.kind|capitalize }}</td><td><span class="badge {{ 'badge-success' if r.status == 'completed' }}">{{ r.status }}</span></td>
+      <td class="muted">{{ r.created_at|dt(user.default_timezone, '%d %b %Y %H:%M') }}</td>
+      <td>{% if r.kind == 'export' and r.result_json %}<a class="btn btn-sm" href="/app/settings/data/export/{{ r.id }}.json">Download</a>{% endif %}</td></tr>{% endfor %}
+  </tbody></table>
+  {% endif %}
+</div>
+<div class="card" style="max-width:760px">
+  <h2>Privacy</h2>
+  {% if db_backup_available %}<p class="muted">Development database (SQLite): <a class="btn btn-sm" href="/app/ops/backup.sqlite">Download database backup</a></p>{% endif %}
+  <p class="muted" style="margin:0">Read our <a href="/privacy">privacy notice</a> (version {{ legal_versions.privacy }}), <a href="/terms">terms</a> and <a href="/data-retention">data retention policy</a>. Exports are generated immediately; deletions are processed as described in the retention policy.</p>
+</div>
+<div class="card" style="max-width:760px;border-color:var(--danger)">
+  <h2 style="color:var(--danger)">Delete account</h2>
+  <p class="muted">Your booking pages stop working immediately, your event types are paused and you'll be signed out. This is logged for compliance and can't be undone from the app.</p>
+  <form method="post" action="/app/settings/data/delete">{{ csrf_input(request) }}
+    <div class="field"><label for="ce">Type <strong>{{ user.email }}</strong> to confirm</label><input type="email" id="ce" name="confirm_email" required autocomplete="off"></div>
+    {% if user.password_hash %}<div class="field"><label for="dp">Password</label><input type="password" id="dp" name="password" required autocomplete="current-password"></div>{% endif %}
+    <button class="btn btn-danger" data-confirm="Permanently delete your account?">Delete my account</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

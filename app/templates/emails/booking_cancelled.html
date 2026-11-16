@@ -1,0 +1,12 @@
+{% extends "emails/base.html" %}
+{% block body %}
+<h1 style="font-size:20px;margin:0 0 8px;">Meeting cancelled</h1>
+<p style="margin:0 0 4px;">
+{% if audience == 'host' %}{{ invitees[0].name if invitees else 'The invitee' }}'s booking of <strong>{{ event_name }}</strong> was cancelled{% if cancelled_by %} by the {{ cancelled_by }}{% endif %}.
+{% else %}Hi {{ invitees[0].name if invitees else 'there' }}, your <strong>{{ event_name }}</strong> with {{ host.name if host else 'your host' }} has been cancelled.{% endif %}
+</p>
+{% if booking.cancel_reason %}<p style="margin:10px 0;padding:10px 12px;background:#fdecea;color:#b42318;border-radius:6px;"><strong>Reason:</strong> {{ booking.cancel_reason }}</p>{% endif %}
+{% include "emails/_details.html" %}
+<p style="font-size:13px;color:#5b6380;">The attached cancel.ics removes the event from calendars that imported the original invite.</p>
+{% if audience != 'host' and host and host.slug %}<p><a href="{{ base_url }}/{{ host.slug }}" style="color:#3b47d6;">Book another time with {{ host.name }}</a></p>{% endif %}
+{% endblock %}

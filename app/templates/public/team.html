@@ -1,0 +1,29 @@
+{% extends "public_base.html" %}
+{% block title %}{{ team.name }}{% endblock %}
+{% block head %}{% include "public/_styles.html" %}{% endblock %}
+{% block content %}
+<div class="public-wrap">
+  <header class="profile-head">
+    {% if team.logo_url %}<img class="avatar" src="{{ team.logo_url }}" alt="">{% else %}<span class="avatar" aria-hidden="true">{{ team.name[:1]|upper }}</span>{% endif %}
+    <h1>{{ team.name }}</h1>
+    {% if team.description %}<p class="muted">{{ team.description }}</p>{% endif %}
+    {% if members %}<div class="host-avatars" style="justify-content:center" aria-label="{{ t('team.members') }}">
+      {% for m in members[:12] %}<span title="{{ m.name }}">{% with u=m, small=True %}{% include "public/_host_avatar.html" %}{% endwith %}</span>{% endfor %}
+    </div>{% endif %}
+  </header>
+  {% if events %}
+  <div class="event-list">
+    {% for e in events %}
+    <a class="card" href="/team/{{ team.slug }}/{{ e.slug }}" style="border-top-color: {{ e.color }}">
+      <h2 style="font-size:1.1rem">{{ e.name }}</h2>
+      <div class="meta-line">⏱ {{ t('book.minutes', n=e.duration) }}</div>
+      <div class="meta-line">👥 {{ t('kind.' ~ e.kind) if e.kind in ('one_on_one', 'group', 'collective', 'round_robin') else e.kind }}</div>
+      {% if e.description %}<p class="muted" style="margin:8px 0 0">{{ e.description|truncate(120) }}</p>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card empty">{{ t('team.no_events') }}</div>
+  {% endif %}
+</div>
+{% endblock %}

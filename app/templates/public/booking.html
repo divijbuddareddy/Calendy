@@ -1,0 +1,233 @@
+{% extends "public_base.html" %}
+{% block title %}{{ t('manage.reschedule') ~ ': ' if mode == 'reschedule' }}{{ et.name }}{% if team %} · {{ team.name }}{% elif owner %} · {{ owner.name }}{% endif %}{% endblock %}
+{% block head %}{% include "public/_styles.html" %}{% endblock %}
+{% block content %}
+<div class="public-wrap">
+  <div class="booking-card{{ ' no-info' if hide_details }}">
+    {% if not hide_details %}
+    <aside class="booking-info" aria-label="{{ t('book.event_details') }}">
+      <div class="host-avatars">
+        {% if team and et.kind != 'one_on_one' %}
+          {% if team.logo_url %}<img class="avatar" src="{{ team.logo_url }}" alt="">{% endif %}
+          {% for h in hosts[:6] %}<span title="{{ h.name }}">{% with u=h, small=True %}{% include "public/_host_avatar.html" %}{% endwith %}</span>{% endfor %}
+        {% else %}
+          {% for h in hosts[:6] %}<span title="{{ h.name }}">{% with u=h, small=hosts|length > 1 %}{% include "public/_host_avatar.html" %}{% endwith %}</span>{% endfor %}
+        {% endif %}
+      </div>
+      <p class="muted" style="margin:0;font-weight:600">
+        {% if team and et.kind in ('round_robin',) %}{{ team.name }}{% else %}{{ hosts|map(attribute='name')|join(', ') }}{% endif %}
+      </p>
+      {% if owner and owner.headline and et.kind == 'one_on_one' %}<p class="muted" style="margin:0;font-size:.85rem">{{ owner.headline }}</p>{% endif %}
+      <h1>{{ et.name }}</h1>
+      <div class="meta-line"><span aria-hidden="true">⏱</span> <span id="duration-label">{{ t('book.minutes', n=duration) }}</span></div>
+      {% if durations|length > 1 and mode == 'book' %}
+      <form method="get" action="{{ ssr.path }}" class="dur-group" role="group" aria-label="{{ t('book.choose_duration') }}">
+        <input type="hidden" name="tz" value="{{ ssr.tz }}">
+        {% for k, v in ssr.hidden.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+        {% for d in durations %}<button type="submit" name="duration" value="{{ d }}" class="btn btn-sm" data-duration="{{ d }}" aria-pressed="{{ 'true' if d == duration else 'false' }}">{{ t('book.minutes', n=d) }}</button>{% endfor %}
+      </form>
+      {% endif %}
+      {% for loc in locations %}
+      <div class="meta-line"><span aria-hidden="true">📍</span> <span>{{ loc.label }}{% if loc.value %}: {{ loc.value }}{% endif %}</span></div>
+      {% endfor %}
+      {% if et.price_minor %}<div class="meta-line"><span aria-hidden="true">💳</span> <span>{{ et.price_minor|money(et.currency) }} · {{ t('book.payment_required') }}</span></div>{% endif %}
+      {% if et.kind == 'group' %}<div class="meta-line"><span aria-hidden="true">👥</span> <span>{{ t('book.group_session', n=et.max_invitees) }}</span></div>{% endif %}
+      {% if et.kind == 'collective' %}<div class="meta-line"><span aria-hidden="true">👥</span> <span>{{ t('book.meet_all_hosts') }}</span></div>{% endif %}
+      {% if et.description %}<div class="event-desc">{{ et.description }}</div>{% endif %}
+      {% if mode == 'reschedule' and booking %}
+        <div class="alert alert-info mt" role="status">{{ t('book.rescheduling_current') }}<br><strong>{{ booking.start_at|ldt(booking.timezone) }}</strong></div>
+      {% endif %}
+      {% if policy.policy_text or policy.min_notice_minutes or policy.allow_cancel == false or policy.host_approval %}
+      <div class="policy">
+        <h3>{{ t('book.cancellation_policy') }}</h3>
+        {% if policy.policy_text %}<p>{{ policy.policy_text }}</p>{% endif %}
+        <ul class="muted" style="padding-left:18px;margin:0">
+          {% if policy.allow_cancel == false %}<li>{{ t('book.policy_no_cancel') }}</li>{% endif %}
+          {% if policy.allow_reschedule == false %}<li>{{ t('book.policy_no_reschedule') }}</li>{% endif %}
+          {% if policy.min_notice_minutes %}<li>{{ t('book.policy_notice', hours=(policy.min_notice_minutes / 60)|round(1)) }}</li>{% endif %}
+          {% if policy.host_approval %}<li>{{ t('book.policy_approval') }}</li>{% endif %}
+          {% if policy.require_reason %}<li>{{ t('book.policy_reason') }}</li>{% endif %}
+        </ul>
+      </div>
+      {% endif %}
+    </aside>
+    {% endif %}
+
+    <section class="booking-main" aria-label="{{ t('book.book_a_time') }}">
+      {% if ssr.error %}<div class="alert alert-error" role="alert" id="ssr-error">{{ ssr.error }}</div>{% endif %}
+      <div id="step-pick" {{ 'hidden' if ssr.slot }}>
+        <h2 id="pick-heading" tabindex="-1">{{ t('book.pick_new_datetime') if mode == 'reschedule' else t('book.select_datetime') }}</h2>
+        <div class="pick-grid">
+          <div>
+            <div class="spread cal-head">
+              {% if ssr.prev_url %}<a class="btn btn-sm btn-ghost" id="cal-prev" href="{{ ssr.prev_url }}" aria-label="{{ t('book.prev_month') }}">‹</a>
+              {% else %}<a class="btn btn-sm btn-ghost" id="cal-prev" role="link" aria-label="{{ t('book.prev_month') }}" aria-disabled="true">‹</a>{% endif %}
+              <strong id="cal-title" aria-live="polite">{{ ssr.month_title }}</strong>
+              <a class="btn btn-sm btn-ghost" id="cal-next" href="{{ ssr.next_url }}" aria-label="{{ t('book.next_month') }}">›</a>
+            </div>
+            <p class="sr-only" id="cal-help">{{ t('book.cal_help') }}</p>
+            <div class="cal-grid" id="cal-grid" role="group" aria-labelledby="cal-title" aria-describedby="cal-help">
+              {% set dow_short = t('date.weekdays_short').split(',') %}{% for name in t('date.weekdays').split(',') %}<div class="dow"><abbr title="{{ name }}">{{ dow_short[loop.index0] }}</abbr></div>{% endfor %}
+              {% for week in ssr.weeks %}{% for c in week %}
+                {% if not c %}<div aria-hidden="true"></div>
+                {% elif c.available %}<a class="cal-day available{{ ' selected' if c.selected }}{{ ' today' if c.today }}" href="{{ c.url }}" data-date="{{ c.date }}" aria-label="{{ c.label }}, {{ t('book.time_available') if c.count == 1 else t('book.times_available', n=c.count) }}"{% if c.selected %} aria-current="date"{% endif %}>{{ c.day }}</a>
+                {% else %}<span class="cal-day{{ ' today' if c.today }}" data-date="{{ c.date }}"><span aria-hidden="true">{{ c.day }}</span><span class="sr-only">{{ c.label }}, {{ t('book.no_times') }}</span></span>{% endif %}
+              {% endfor %}{% endfor %}
+            </div>
+            <form method="get" action="{{ ssr.path }}" class="field tz-field" id="tz-form">
+              <label for="tz-select">{{ t('book.timezone') }}</label>
+              {% for k, v in ssr.hidden.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+              <input type="hidden" name="duration" value="{{ duration }}">
+              <input type="hidden" name="month" value="{{ ssr.month }}">
+              {% if ssr.date %}<input type="hidden" name="date" value="{{ ssr.date }}">{% endif %}
+              <div class="row" style="flex-wrap:nowrap">
+                <select id="tz-select" name="tz" aria-describedby="tz-help">
+                  {% for z in timezones %}<option value="{{ z }}" {{ 'selected' if z == ssr.tz }}>{{ z|replace('_', ' ') }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="btn btn-sm" id="tz-apply">{{ t('book.update') }}</button>
+              </div>
+              <p class="help" id="tz-help">{{ t('book.times_in_tz') }}</p>
+            </form>
+            <label class="check" id="h12-wrap" hidden><input type="checkbox" id="h12"> {{ t('book.clock_12h') }}</label>
+          </div>
+          <div>
+            <h3 id="slots-title">{{ ssr.date_title or ('' if ssr.empty else t('book.choose_day')) }}</h3>
+            <div id="slots" class="slot-list" role="list" aria-labelledby="slots-title">
+              {% for x in ssr.day_slots %}
+              <div class="slot-row" role="listitem">
+                {% if x.full %}<span class="slot full">{{ x.label }}<small>{{ t('book.full') }}</small></span>
+                {% else %}<a class="slot" href="{{ x.url }}" aria-label="{{ t('book.select_time_on', time=x.label, date=ssr.date_title) }}">{{ x.label }}{% if config.show_seats and x.seats_remaining is not none %}<small>{{ t('book.spot_left') if x.seats_remaining == 1 else t('book.spots_left', n=x.seats_remaining) }}</small>{% endif %}</a>{% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div id="pick-state" class="mt" role="status" aria-live="polite">{% if ssr.empty %}<div class="state">{{ t('book.no_times_month', month=ssr.month_title) }}</div>{% endif %}</div>
+      </div>
+
+      <div id="step-details" {{ 'hidden' if not ssr.slot }}>
+        <a class="btn btn-sm btn-ghost" id="back-btn" href="{{ ssr.back_url }}">← {{ t('book.back') }}</a>
+        <h2 class="mt" id="details-heading" tabindex="-1">{{ t('book.confirm_new_time') if mode == 'reschedule' else t('book.enter_details') }}</h2>
+        <div class="selected-summary" id="selected-summary" aria-live="polite">{{ ssr.summary or '' }}</div>
+        {% if notice %}<div class="alert alert-info" role="status">{{ notice }}</div>{% endif %}
+        <form id="details-form" method="post" action="{{ post_url }}">
+          {{ csrf_input(request) }}
+          <input type="hidden" name="start_at" id="f-start" value="{{ ssr.slot.start_at if ssr.slot else '' }}">
+          <input type="hidden" name="slot_token" id="f-slot-token" value="{{ ssr.slot.slot_token if ssr.slot else '' }}">
+          <input type="hidden" name="tz" id="f-tz" value="{{ ssr.tz }}">
+          <input type="hidden" name="duration" id="f-duration" value="{{ duration }}">
+          <input type="hidden" name="idempotency_key" id="f-idem" value="{{ idempotency_key }}">
+          {% for k in ('utm_source','utm_medium','utm_campaign','utm_term','utm_content','rsid') %}{% if ssr.hidden.get(k) %}<input type="hidden" name="{{ k }}" value="{{ ssr.hidden.get(k) }}">{% endif %}{% endfor %}
+          {% if mode == 'book' %}
+          {% macro ferr(key) %}<p class="help field-error" id="err-{{ key }}" {{ 'hidden' if not field_errors.get(key) }}>{{ field_errors.get(key) or '' }}</p>{% endmacro %}
+          <div class="field">
+            <label for="f-name">{{ t('book.name') }} <span class="req" aria-hidden="true">*</span><span class="sr-only">{{ t('book.required') }}</span></label>
+            <input type="text" id="f-name" name="name" required autocomplete="name" maxlength="200" value="{{ prefill.name }}" aria-describedby="err-name"{% if field_errors.get('name') %} aria-invalid="true"{% endif %}>
+            {{ ferr('name') }}
+          </div>
+          <div class="field">
+            <label for="f-email">{{ t('book.email') }} <span class="req" aria-hidden="true">*</span><span class="sr-only">{{ t('book.required') }}</span></label>
+            <input type="email" id="f-email" name="email" required autocomplete="email" maxlength="320" value="{{ prefill.email }}" aria-describedby="err-email"{% if field_errors.get('email') %} aria-invalid="true"{% endif %}>
+            {{ ferr('email') }}
+          </div>
+          {% if et.requires_email_verification %}
+          <div class="field">
+            <label for="f-code">{{ t('book.verification_code') }} <span class="req" aria-hidden="true">*</span><span class="sr-only">{{ t('book.required') }}</span></label>
+            <div class="row" style="flex-wrap:nowrap">
+              <input type="text" id="f-code" name="verification_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" aria-describedby="code-help">
+              <button type="submit" class="btn" id="send-code" name="action" value="send_code" formnovalidate>{{ t('book.send_code') }}</button>
+            </div>
+            <p class="help" id="code-help">{{ t('book.code_help') }}</p>
+          </div>
+          {% endif %}
+          {% if locations|length > 1 %}
+          <fieldset class="field" style="border:0;padding:0;margin:0 0 14px">
+            <legend style="font-weight:600;font-size:.88rem;margin-bottom:4px">{{ t('book.location') }}</legend>
+            {% for loc in locations %}
+            <label class="check"><input type="radio" name="location" value="{{ loc.index }}" {{ 'checked' if (prefill.location and prefill.location == loc.index|string) or (not prefill.location and loop.first) }}> {{ loc.label }}</label>
+            {% endfor %}
+          </fieldset>
+          {% endif %}
+          {% set needs_phone = locations|selectattr('type', 'equalto', 'invitee_phone')|list|length > 0 %}
+          <div class="field">
+            <label for="f-phone">{{ t('book.phone') }} {% if needs_phone %}<span class="req" aria-hidden="true">*</span><span class="sr-only">{{ t('book.required') }}</span>{% else %}<span class="muted">{{ t('book.optional') }}</span>{% endif %}</label>
+            <input type="tel" id="f-phone" name="phone" autocomplete="tel" maxlength="25" value="{{ prefill.phone }}" {{ 'required' if needs_phone }} aria-describedby="err-phone"{% if field_errors.get('phone') %} aria-invalid="true"{% endif %}>
+            {{ ferr('phone') }}
+          </div>
+          <details class="field" {{ 'open' if prefill.guests or field_errors.get('guests') }}>
+            <summary>{{ t('book.add_guests') }}</summary>
+            <label for="f-guests" class="sr-only">{{ t('book.guest_emails') }}</label>
+            <textarea id="f-guests" name="guests" placeholder="guest@example.com, another@example.com" aria-describedby="guests-help err-guests">{{ prefill.guests }}</textarea>
+            <p class="help" id="guests-help">{{ t('book.guests_help') }}</p>
+            {{ ferr('guests') }}
+          </details>
+          {% for q in questions %}
+          {% set qv = prefill.answers.get(q.id, '') %}
+          {% set fid = 'q-' ~ q.id %}
+          {% set qerr = field_errors.get(q.id) %}
+          <div class="field" data-qid="{{ q.id }}" data-qtype="{{ q.type }}" data-required="{{ 'true' if q.required else 'false' }}">
+            {% if q.type in ('checkbox', 'consent') and not q.options_json %}
+              <label class="check"><input type="checkbox" id="{{ fid }}" name="{{ fid }}" {{ 'checked' if qv in ('1', 'true', 'on', 'yes', True) }} {{ 'required' if q.required }} aria-describedby="err-{{ fid }}"{% if qerr %} aria-invalid="true"{% endif %}> {{ q.label }}{% if q.required %} <span class="req" aria-hidden="true">*</span><span class="sr-only">{{ t('book.required') }}</span>{% endif %}</label>
+            {% elif q.type in ('radio', 'checkbox') %}
+              <fieldset style="border:0;padding:0;margin:0" aria-describedby="err-{{ fid }}">
+                <legend style="font-weight:600;font-size:.88rem;margin-bottom:4px">{{ q.label }}{% if q.required %} <span class="req" aria-hidden="true">*</span><span class="sr-only">{{ t('book.required') }}</span>{% endif %}</legend>
+                {% for opt in q.options_json or [] %}{% set ov = opt.value if opt is mapping else opt %}{% set ol = opt.label if opt is mapping else opt %}
+                <label class="check"><input type="{{ q.type }}" name="{{ fid }}" value="{{ ov }}" {{ 'checked' if (qv == ov or (qv is iterable and qv is not string and ov in qv)) }}> {{ ol }}</label>
+                {% endfor %}
+              </fieldset>
+            {% else %}
+              <label for="{{ fid }}">{{ q.label }}{% if q.required %} <span class="req" aria-hidden="true">*</span><span class="sr-only">{{ t('book.required') }}</span>{% endif %}</label>
+              {% if q.type == 'textarea' %}
+                <textarea id="{{ fid }}" name="{{ fid }}" maxlength="5000" {{ 'required' if q.required }} aria-describedby="err-{{ fid }}"{% if qerr %} aria-invalid="true"{% endif %}>{{ qv }}</textarea>
+              {% elif q.type == 'select' %}
+                <select id="{{ fid }}" name="{{ fid }}" {{ 'required' if q.required }} aria-describedby="err-{{ fid }}"{% if qerr %} aria-invalid="true"{% endif %}>
+                  <option value="">{{ t('book.select_placeholder') }}</option>
+                  {% for opt in q.options_json or [] %}{% set ov = opt.value if opt is mapping else opt %}{% set ol = opt.label if opt is mapping else opt %}
+                  <option value="{{ ov }}" {{ 'selected' if qv == ov }}>{{ ol }}</option>
+                  {% endfor %}
+                </select>
+              {% else %}
+                <input id="{{ fid }}" name="{{ fid }}" value="{{ qv }}" {{ 'required' if q.required }} aria-describedby="err-{{ fid }}"{% if qerr %} aria-invalid="true"{% endif %}
+                  type="{{ {'email':'email','url':'url','phone':'tel','number':'number'}.get(q.type, 'text') }}"
+                  {% if q.type == 'company' %}autocomplete="organization"{% elif q.type == 'phone' %}autocomplete="tel"{% endif %}>
+              {% endif %}
+            {% endif %}
+            {% if q.help_text %}<p class="help">{{ q.help_text }}</p>{% endif %}
+            <p class="help field-error" id="err-{{ fid }}" {{ 'hidden' if not qerr }}>{{ qerr or '' }}</p>
+          </div>
+          {% endfor %}
+          <div class="hp" aria-hidden="true"><label for="f-website">{{ t('book.leave_empty') }}</label><input type="text" id="f-website" name="website" tabindex="-1" autocomplete="off"></div>
+          {% set privacy_link %}<a href="/privacy" target="_blank" rel="noopener">{{ t('book.privacy_link') }}</a>{% endset %}
+          {% set retention_link %}<a href="/data-retention" target="_blank" rel="noopener">{{ t('book.retention_link') }}</a>{% endset %}
+          <p class="help">{{ (t('book.consent_full')|e)|replace('{privacy_link}', privacy_link)|replace('{retention_link}', retention_link)|replace('{version}', privacy_version) }}</p>
+          {% else %}
+          <div class="field">
+            <label for="f-reason">{{ t('book.reschedule_reason') }} <span class="muted">{{ t('book.optional') }}</span></label>
+            <textarea id="f-reason" name="reason" maxlength="2000"></textarea>
+          </div>
+          {% endif %}
+          <div id="form-error" class="alert alert-error" role="alert" tabindex="-1" {{ 'hidden' if not form_error }}>{{ form_error or '' }}</div>
+          <button class="btn btn-primary btn-block" type="submit" id="submit-btn">
+            {% if mode == 'reschedule' %}{{ t('book.confirm_reschedule') }}{% elif et.price_minor %}{{ t('book.continue_to_payment') }}{% else %}{{ t('book.schedule_event') }}{% endif %}
+          </button>
+        </form>
+      </div>
+
+      <div id="step-waitlist" hidden>
+        <button type="button" class="btn btn-sm btn-ghost" id="wl-back">← {{ t('book.back') }}</button>
+        <h2 class="mt">{{ t('book.join_waitlist') }}</h2>
+        <p class="muted" id="wl-summary"></p>
+        <form id="waitlist-form" novalidate>
+          <div class="field"><label for="wl-name">{{ t('book.name') }}</label><input type="text" id="wl-name" required value="{{ prefill.name }}"></div>
+          <div class="field"><label for="wl-email">{{ t('book.email') }}</label><input type="email" id="wl-email" required value="{{ prefill.email }}"></div>
+          <div id="wl-msg" role="status"></div>
+          <button class="btn btn-primary btn-block" type="submit">{{ t('book.waitlist_button') }}</button>
+        </form>
+      </div>
+    </section>
+  </div>
+</div>
+<script type="application/json" id="booking-config">{{ config|tojson }}</script>
+{% endblock %}
+{% block scripts %}<script>window.AAL_I18N = {{ i18n_catalog(locale)|tojson }}; window.AAL_LOCALE = {{ (locale or 'en')|tojson }};</script>
+<script src="/static/booking.js"></script>{% endblock %}

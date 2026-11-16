@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Workflows{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Workflows</h1>
+    <p class="muted" style="margin:0">Automated reminders and follow-ups. Rules run deterministically on booking events; messages are never sent for cancelled or rescheduled meetings.</p>
+  </div>
+  <div class="row">
+    <a class="btn" href="/app/workflows/runs">Run history</a>
+    <a class="btn btn-primary" href="/app/workflows/new">+ New workflow</a>
+  </div>
+</div>
+
+<section class="card">
+  <h2>Quick start templates</h2>
+  <div class="grid grid-4">
+    {% for t in templates_ %}
+    <div class="card" style="box-shadow:none">
+      <strong>{{ t.name }}</strong>
+      <p class="muted" style="font-size:.85rem">{{ triggers[t.trigger] }}{% if t.offset_minutes %} · {{ (t.offset_minutes / 60)|int if t.offset_minutes < 1440 else (t.offset_minutes / 1440)|int }} {{ 'hour(s)' if t.offset_minutes < 1440 else 'day(s)' }}{% endif %} · {{ t.channel|upper }}</p>
+      <form method="post" action="/app/workflows/templates/{{ t.key }}">{{ csrf_input(request) }}
+        <button class="btn btn-sm" type="submit" {{ 'disabled' if t.channel == 'sms' and not has_feature(workspace, 'sms') }}>Add</button></form>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="card">
+  <h2>Your workflows</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Name</th><th>Trigger</th><th>Channel / audience</th><th>Applies to</th><th>Sent</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for wf in workflows %}
+        <tr>
+          <td><a href="/app/workflows/{{ wf.id }}"><strong>{{ wf.name }}</strong></a>
+            {% if wf.managed %}<span class="badge badge-primary" title="Managed by an admin – members can't edit">Managed</span>{% endif %}</td>
+          <td>{{ triggers.get(wf.trigger, wf.trigger) }}{% if wf.offset_minutes %}<div class="muted" style="font-size:.8rem">{{ wf.offset_minutes }} min {{ 'before' if wf.trigger == 'before_event' else 'after' }}</div>{% endif %}</td>
+          <td>{{ wf.channel|upper }} → {{ wf.audience }}{% if wf.custom_recipient %} ({{ wf.custom_recipient }}){% endif %}</td>
+          <td>{% set ids = (wf.conditions_json or {}).get('event_type_ids') or [] %}
+            {% if ids %}{% for i in ids %}{% if i in event_types %}<span class="badge">{{ event_types[i].name }}</span> {% endif %}{% endfor %}{% else %}<span class="muted">All event types</span>{% endif %}</td>
+          <td>{{ sent_counts.get(wf.id, 0) }}{% if failed_counts.get(wf.id) %} <span class="badge badge-danger">{{ failed_counts[wf.id] }} failed</span>{% endif %}</td>
+          <td>{% if wf.active %}<span class="badge badge-success">On</span>{% else %}<span class="badge">Off</span>{% endif %}</td>
+          <td class="row" style="gap:4px">
+            <a class="btn btn-sm" href="/app/workflows/{{ wf.id }}/runs">History</a>
+            {% if can_edit(wf) %}
+            <form method="post" action="/app/workflows/{{ wf.id }}/toggle">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">{{ 'Turn off' if wf.active else 'Turn on' }}</button></form>
+            <form method="post" action="/app/workflows/{{ wf.id }}/delete">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Delete '{{ wf.name }}'? Scheduled messages will be cancelled.">Delete</button></form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">No workflows yet. Add a template above or create your own.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Quiet hours</h2>
+  <p class="muted">Workflow messages scheduled inside this window are held until it ends (reminders are never pushed past the meeting start). Confirmation and cancellation emails are always sent immediately.</p>
+  {% if ctx.can('admin') %}
+  <form method="post" action="/app/workflows/quiet-hours" class="inline-fields" style="align-items:flex-end">
+    {{ csrf_input(request) }}
+    <label class="check" style="flex:0 0 auto"><input type="checkbox" name="enabled" value="1" {{ 'checked' if quiet.start }}> Enable</label>
+    <div class="field" style="margin:0"><label for="qh-start">From</label><input id="qh-start" type="time" name="start" value="{{ quiet.start or '21:00' }}"></div>
+    <div class="field" style="margin:0"><label for="qh-end">Until</label><input id="qh-end" type="time" name="end" value="{{ quiet.end or '08:00' }}"></div>
+    <div class="field" style="margin:0"><label for="qh-tz">Timezone</label><input id="qh-tz" type="text" name="tz" value="{{ quiet.tz or '' }}" placeholder="Recipient's timezone"></div>
+    <button class="btn btn-primary" type="submit" style="flex:0 0 auto">Save</button>
+  </form>
+  {% else %}
+  <p>{% if quiet.start %}Quiet hours: {{ quiet.start }}–{{ quiet.end }} {{ quiet.tz or "(recipient's timezone)" }}{% else %}No quiet hours set.{% endif %} <span class="muted">Managed by workspace admins.</span></p>
+  {% endif %}
+</section>
+{% endblock %}

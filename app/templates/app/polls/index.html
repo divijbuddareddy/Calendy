@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Meeting polls{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Meeting polls</h1>
+    <p class="muted">Propose a few times, let the group vote, then confirm the winner &mdash; everyone gets the final time by email.</p>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <div class="card-head"><h2>New poll</h2></div>
+    <form method="post" action="/app/polls">
+      {{ csrf_input(request) }}
+      <div class="field"><label for="title">Title</label><input id="title" type="text" name="title" required maxlength="300" placeholder="Quarterly planning"></div>
+      <div class="field"><label for="description">Description <span class="muted">(optional)</span></label><textarea id="description" name="description" rows="2"></textarea></div>
+      <div class="inline-fields">
+        <div class="field"><label for="duration">Duration (min)</label><input id="duration" type="number" name="duration" min="5" max="720" value="30" required></div>
+        <div class="field"><label for="location_type">Location</label>
+          <select id="location_type" name="location_type">{% for k, v in location_types %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+      </div>
+      <div class="field"><label for="location_value">Location details <span class="muted">(link, address or phone)</span></label><input id="location_value" type="text" name="location_value" maxlength="500"></div>
+      <fieldset style="border:0;padding:0;margin:0">
+        <legend><strong>Candidate times</strong> <span class="muted">({{ user.default_timezone }})</span></legend>
+        <div id="times" class="stack">
+          <input type="datetime-local" name="times" aria-label="Candidate time 1" required>
+          <input type="datetime-local" name="times" aria-label="Candidate time 2" required>
+          <input type="datetime-local" name="times" aria-label="Candidate time 3">
+        </div>
+        <button type="button" class="btn btn-sm btn-ghost mt" id="add-time">+ Add another time</button>
+      </fieldset>
+      <div class="mt"><button class="btn btn-primary" type="submit">Create poll</button></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Your polls</h2></div>
+    {% if polls %}
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Poll</th><th>Votes</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for p in polls %}
+        <tr>
+          <td><a href="/app/polls/{{ p.id }}">{{ p.title }}</a><div class="muted">{{ p.options_json|length }} times &middot; {{ p.duration }} min</div></td>
+          <td>{{ counts.get(p.id, 0) }}</td>
+          <td><span class="badge {{ {'open':'badge-primary','booked':'badge-success'}.get(p.status, '') }}">{{ p.status }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}<div class="empty">No polls yet.</div>{% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('add-time').addEventListener('click', function () {
+  var box = document.getElementById('times');
+  if (box.children.length >= 20) return toast('Up to 20 times per poll');
+  var i = document.createElement('input'); i.type = 'datetime-local'; i.name = 'times';
+  i.setAttribute('aria-label', 'Candidate time ' + (box.children.length + 1));
+  box.appendChild(i); i.focus();
+});
+</script>
+{% endblock %}

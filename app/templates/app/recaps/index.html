@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Notetaker{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Notetaker &amp; recaps</h1>
+    <p class="muted">Record with consent, then get a summary, decisions and action items. Transcripts are encrypted at rest and deleted after the retention period (90 days by default).</p>
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" action="/app/recaps" class="row" role="search">
+    <label for="q" class="sr-only">Search transcripts</label>
+    <input id="q" type="search" name="q" value="{{ q }}" placeholder="Search across transcripts and recaps" style="flex:1">
+    <button class="btn" type="submit">Search</button>
+    {% if q %}<a class="btn btn-ghost" href="/app/recaps">Clear</a>{% endif %}
+  </form>
+  {% if results is not none %}
+    <div class="mt">
+    {% if results %}
+      {% for res in results %}
+        <div class="card" style="box-shadow:none">
+          <div class="spread"><a href="/app/recaps/{{ res.recap.id }}"><strong>{{ res.recap.title }}</strong></a><span class="muted">{{ res.count }} matching line{{ 's' if res.count != 1 }}</span></div>
+          {% for h in res.hits %}<p class="muted" style="margin:.3em 0">&hellip; {{ h }}</p>{% endfor %}
+        </div>
+      {% endfor %}
+    {% else %}<div class="empty">No transcripts mention &ldquo;{{ q }}&rdquo;.</div>{% endif %}
+    </div>
+  {% endif %}
+</div>
+
+<div class="grid grid-2 mt">
+  <div class="card">
+    <div class="card-head"><h2>Meetings (last &amp; next 14 days)</h2></div>
+    {% if bookings %}
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Meeting</th><th>Notetaker</th></tr></thead>
+      <tbody>
+      {% for b in bookings %}
+        <tr>
+          <td><strong>{{ (b.snapshot_json or {}).get('name', 'Meeting') }}</strong>{% if b.invitees %} with {{ b.invitees[0].name }}{% endif %}<div class="muted">{{ b.start_at|dt(user.default_timezone) }}</div></td>
+          <td>
+            {% set rc = recap_by_booking.get(b.id) %}
+            {% if rc %}<a class="btn btn-sm" href="/app/recaps/{{ rc.id }}">Open recap</a>
+            {% else %}
+            <form method="post" action="/app/recaps/new">
+              {{ csrf_input(request) }}<input type="hidden" name="booking_id" value="{{ b.id }}">
+              {% set ju = (b.location_json or {}).get('join_url') %}
+              {% if not ju %}<label class="sr-only" for="mu_{{ b.id }}">Meeting URL</label><input id="mu_{{ b.id }}" type="url" name="meeting_url" placeholder="https://zoom.us/j/... (optional)" pattern="https://.*">{% endif %}
+              <label class="check"><input type="checkbox" name="consent" value="yes" required> Participants will be emailed a recording notice and consent to recording</label>
+              <button class="btn btn-sm btn-primary mt" type="submit">Add notetaker</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}<div class="empty">No confirmed meetings in this window.</div>{% endif %}
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Recap from a transcript</h2></div>
+    <p class="muted">Have a transcript from another tool? Create a recap and paste or upload it.</p>
+    <form method="post" action="/app/recaps/new">
+      {{ csrf_input(request) }}
+      <div class="field"><label for="title">Title</label><input id="title" type="text" name="title" required maxlength="300" placeholder="Weekly sync"></div>
+      <label class="check"><input type="checkbox" name="consent" value="yes" required> All participants consented to recording/transcription</label>
+      <button class="btn btn-primary mt" type="submit">Create recap</button>
+    </form>
+  </div>
+</div>
+
+<div class="card mt">
+  <div class="card-head"><h2>Recaps</h2></div>
+  {% if recaps %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Title</th><th>Status</th><th>Shared</th><th>Created</th><th>Deletes</th></tr></thead>
+    <tbody>
+    {% for r in recaps %}
+      <tr>
+        <td><a href="/app/recaps/{{ r.id }}">{{ r.title }}</a></td>
+        <td><span class="badge {{ {'recording':'badge-danger','processed':'badge-success','joining':'badge-warning'}.get(r.recording_status, '') }}">{{ r.recording_status }}</span></td>
+        <td>{% if r.share_token %}<span class="badge badge-primary">{{ 'Password' if r.share_password_hash else 'Link' }}</span>{% else %}&mdash;{% endif %}</td>
+        <td class="muted">{{ r.created_at|dt(user.default_timezone, '%d %b %Y') }}</td>
+        <td class="muted">{{ r.retention_until|dt(user.default_timezone, '%d %b %Y') }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<div class="empty">No recaps yet.</div>{% endif %}
+</div>
+{% endblock %}

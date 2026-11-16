@@ -1,0 +1,31 @@
+{% extends "legal/_layout.html" %}
+{% block title %}Terms of service · {{ app_name }}{% endblock %}
+{% block legal %}
+<h1>Terms of service</h1>
+<p class="muted">Version {{ versions.terms }} · {{ company }}</p>
+<h2>1. The service</h2>
+<p>{{ app_name }} lets hosts publish booking links and lets invitees book time with them. Invitees do not need an account.</p>
+<h2>2. Accounts</h2>
+<p>You must give accurate information, keep your password secret and verify your email before your booking links go live.
+You are responsible for activity in your workspace, including members you invite.</p>
+<h2>3. Acceptable use</h2>
+<p>Do not use the service to send spam, collect data unlawfully, impersonate others, try to access other workspaces or
+interfere with the service (including automated booking abuse). We may rate-limit or suspend abusive accounts.</p>
+<h2>4. Host responsibilities</h2>
+<p>Hosts are responsible for the questions they ask invitees, for having a lawful basis to process invitee data and for any
+recording or notetaking consent the law requires.</p>
+<h2>5. Plans and payments</h2>
+<p>Features and limits depend on your plan. Stripe or PayPal process payments that invitees make to hosts, under their own terms.</p>
+<h2>6. Data</h2>
+<p>Our <a href="/privacy">privacy notice</a> and <a href="/data-retention">data retention policy</a> form part of these terms.
+You can export or delete your data at any time.</p>
+<h2>7. Availability</h2>
+<p>We aim for 99.5% monthly availability but provide the service "as is". Third-party calendar, video and payment providers
+can fail. We show their health and retry, but we cannot guarantee them.</p>
+<h2>8. Liability</h2>
+<p>To the extent the law allows, our liability is limited to the fees you paid in the 12 months before the claim.</p>
+<h2>9. Termination</h2>
+<p>You can stop using the service and delete your account at any time. We may suspend accounts that breach these terms.</p>
+<h2>10. Changes</h2>
+<p>We publish new versions on this page and email workspace owners about material changes.</p>
+{% endblock %}

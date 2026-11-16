@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Data deletion{% endblock %}
+{% block content %}
+{% include "app/admin/_tabs.html" %}
+<div class="grid grid-2">
+  <form class="card" method="post" action="/app/admin/data-deletion">
+    {{ csrf_input(request) }}
+    <h2>Delete invitee data</h2>
+    <p class="muted">Anonymises every booking invitee record, booking answer, contact, routing submission, poll vote and waitlist
+      entry for an email address across this workspace. Meeting times are kept for reporting. This cannot be undone.</p>
+    {% if not allowed %}<p class="alert alert-info">Organisation data deletion is available on the Enterprise plan.</p>{% endif %}
+    <div class="field"><label for="dd-email">Invitee email</label><input id="dd-email" type="email" name="email" required></div>
+    <div class="field"><label for="dd-confirm">Type the email again to confirm</label><input id="dd-confirm" type="email" name="confirm" required></div>
+    <button class="btn btn-danger" type="submit" {{ 'disabled' if not allowed }} data-confirm="Permanently anonymise this person's data?">Delete data</button>
+    <p class="help mt">API: <code>POST /app/api/admin/data-deletion</code> with <code>{"email": "..."}</code>.</p>
+  </form>
+  <section class="card">
+    <h2>Deletion history</h2>
+    {% if history %}
+    <table class="table"><thead><tr><th>When</th><th>Records</th></tr></thead><tbody>
+      {% for h in history %}<tr><td>{{ h.created_at | dt(user.default_timezone) }}</td>
+        <td><small>{% for k, v in (h.result_json or {}).items() if k != 'email_hash' %}{{ k }} {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}</small></td></tr>{% endfor %}
+    </tbody></table>
+    <p class="help">Emails are not stored; requests are recorded by keyed hash in the audit log.</p>
+    {% else %}<p class="empty">No deletion requests yet.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

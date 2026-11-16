@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}{{ t.name }} · Managed{% endblock %}
+{% block content %}
+{% include "app/admin/_tabs.html" %}
+<p><a href="/app/admin/managed-events">← All templates</a></p>
+<div class="grid grid-2">
+  <div>
+    <form class="card" method="post" action="/app/admin/managed-events/{{ t.id }}">
+      {{ csrf_input(request) }}
+      <div class="card-head"><h2>Template · v{{ t.version }}</h2><span class="badge badge-primary">Managed</span></div>
+      {% include "app/admin/_managed_fields.html" %}
+      <button class="btn btn-primary" type="submit">Save template</button>
+    </form>
+
+    <section class="card">
+      <h2>Invitee questions</h2>
+      {% if t.questions %}
+      <ul class="stack" style="list-style:none;padding:0">
+        {% for q in t.questions %}
+        <li class="spread"><span><strong>{{ q.label }}</strong> <span class="muted">· {{ q.type }}{{ ' · required' if q.required }}{% if q.options_json %} · {{ q.options_json|join(', ') }}{% endif %}</span></span>
+          <form method="post" action="/app/admin/managed-events/{{ t.id }}/questions/{{ q.id }}/delete" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-ghost" type="submit" aria-label="Delete question {{ q.label }}">Remove</button></form></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">Name and email are always asked. Add extra questions below.</p>{% endif %}
+      <form method="post" action="/app/admin/managed-events/{{ t.id }}/questions" class="mt">
+        {{ csrf_input(request) }}
+        <div class="inline-fields">
+          <div style="flex:2"><label for="q-label">Question</label><input id="q-label" type="text" name="label" required></div>
+          <div><label for="q-type">Type</label><select id="q-type" name="type">
+            {% for k in ['text','textarea','phone','email','number','url','select','radio','checkbox'] %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select></div>
+        </div>
+        <div class="field mt"><label for="q-opts">Options (comma separated, for select/radio/checkbox)</label><input id="q-opts" type="text" name="options"></div>
+        <label class="check"><input type="checkbox" name="required" value="1"> Required</label>
+        <button class="btn btn-sm mt" type="submit">Add question</button>
+      </form>
+    </section>
+  </div>
+
+  <div>
+    <section class="card">
+      <div class="card-head"><h2>Assigned members</h2>
+        <form method="post" action="/app/admin/managed-events/{{ t.id }}/sync" style="margin:0">{{ csrf_input(request) }}
+          <button class="btn btn-sm btn-primary" type="submit" {{ 'disabled' if not kids }}>Sync to members</button></form></div>
+      {% if kids %}
+      <table class="table">
+        <thead><tr><th>Member</th><th>Version</th><th><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody>
+        {% for k in kids %}{% set u = users.get(k.owner_user_id) %}
+          <tr>
+            <td><strong>{{ u.name if u else k.owner_user_id }}</strong><br><span class="muted">/{{ u.slug if u }}/{{ k.slug }}</span></td>
+            <td>{% if k.version >= t.version %}<span class="badge badge-success">In sync</span>{% else %}<span class="badge badge-warning">Out of date</span>{% endif %}</td>
+            <td><form method="post" action="/app/admin/managed-events/{{ t.id }}/children/{{ k.id }}/detach" style="margin:0">{{ csrf_input(request) }}
+              <button class="btn btn-sm btn-ghost" type="submit" data-confirm="Detach? The member's event type becomes fully editable and stops syncing.">Detach</button></form></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<div class="empty">Not assigned yet.</div>{% endif %}
+    </section>
+
+    <form class="card" method="post" action="/app/admin/managed-events/{{ t.id }}/assign">
+      {{ csrf_input(request) }}
+      <h2>Assign to members</h2>
+      <div class="stack">
+      {% for uid, u in users.items() %}
+        <label class="check"><input type="checkbox" name="user_ids" value="{{ uid }}" {{ 'checked disabled' if uid in assigned }}> {{ u.name or u.email }} <span class="muted">{{ u.email }}</span></label>
+      {% endfor %}
+      </div>
+      <button class="btn btn-primary mt" type="submit">Assign</button>
+    </form>
+
+    <form class="card" method="post" action="/app/admin/managed-events/{{ t.id }}/delete">
+      {{ csrf_input(request) }}
+      <h2>Delete template</h2>
+      <p class="muted">Members keep their event types; locks are removed.</p>
+      <button class="btn btn-danger" type="submit" data-confirm="Delete this managed template?">Delete template</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

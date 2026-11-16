@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}No-booking follow-ups{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="muted" style="margin:0"><a href="/app/contacts">← Contacts</a></p>
+    <h1>No-booking follow-ups</h1>
+    <p class="muted">People from the last 90 days who filled in a routing form without booking, or whose meetings were all cancelled, and who have nothing booked now.</p>
+  </div>
+</div>
+<section class="card">
+  {% if items %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Person</th><th>Why</th><th>When</th><th>Last follow-up</th><th><span class="sr-only">Actions</span></th></tr></thead>
+    <tbody>
+    {% for it in items %}
+      <tr>
+        <td>{% if it.contact %}<a href="/app/contacts/{{ it.contact.id }}">{{ it.contact.name or it.email }}</a><br><span class="muted">{{ it.email }}</span>{% else %}{{ it.email }}{% endif %}
+          {% if it.contact and it.contact.unsubscribed %}<span class="badge badge-warning">Unsubscribed</span>{% endif %}</td>
+        <td>{% if it.kind == 'routing' %}{% set f = forms.get(it.submission.form_id) %}Routed, didn't book{% if f %} · <a href="/app/routing/{{ f.id }}/submissions">{{ f.name }}</a>{% endif %}
+            {% else %}Cancelled, not rebooked{% if it.booking %} · <a href="/app/scheduled/{{ it.booking.id }}">meeting</a>{% endif %}{% endif %}</td>
+        <td class="muted">{{ it.at|dt(user.default_timezone) }}</td>
+        <td class="muted">{% if it.last_followup %}{{ it.last_followup.created_at|dt(user.default_timezone) }}{% else %}—{% endif %}</td>
+        <td style="text-align:right">
+          {% if it.contact and it.contact.unsubscribed %}<span class="muted">Suppressed</span>
+          {% elif ctx.role != 'viewer' %}
+          <form method="post" action="/app/contacts/follow-ups/send" class="row" style="justify-content:flex-end">
+            {{ csrf_input(request) }}
+            <input type="hidden" name="email" value="{{ it.email }}">
+            <label class="sr-only" for="fu-et-{{ loop.index }}">Booking link</label>
+            <select id="fu-et-{{ loop.index }}" name="event_type_id">
+              <option value="">My booking page</option>
+              {% for e in events %}<option value="{{ e.id }}">{{ e.name }}</option>{% endfor %}
+            </select>
+            <button class="btn btn-sm btn-primary" type="submit">{{ 'Follow up again' if it.last_followup else 'Send follow-up' }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="help">One click sends a short email with a prefilled booking link. Unsubscribed contacts are never emailed.</p>
+  {% else %}<div class="empty">No missed opportunities: everyone who reached out has a meeting booked.</div>{% endif %}
+</section>
+{% endblock %}

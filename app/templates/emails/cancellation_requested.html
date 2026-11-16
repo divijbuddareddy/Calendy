@@ -1,0 +1,8 @@
+{% extends "emails/base.html" %}
+{% block body %}
+<h1 style="font-size:20px;margin:0 0 8px;">Cancellation requested</h1>
+<p>{{ invitees[0].name if invitees else 'The invitee' }} asked to cancel <strong>{{ event_name }}</strong>. Please approve or decline the request.</p>
+{% if reason %}<p style="padding:10px 12px;background:#fff4dc;color:#8a5a00;border-radius:6px;"><strong>Reason:</strong> {{ reason }}</p>{% endif %}
+{% set audience = 'host' %}{% include "emails/_details.html" %}
+<p><a href="{{ app_link }}" style="display:inline-block;padding:9px 14px;background:#3b47d6;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">Review request</a></p>
+{% endblock %}

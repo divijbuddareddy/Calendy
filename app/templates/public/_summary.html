@@ -1,0 +1,14 @@
+<ul class="summary-list">
+  <li><span class="k">{{ t('summary.what') }}</span><span><strong>{{ snap.name or (et.name if et) }}</strong> · {{ t('book.minutes', n=duration) }}</span></li>
+  <li><span class="k">{{ t('confirm.when') }}</span><span>{{ when }}<br>{{ time_range }}</span></li>
+  <li><span class="k">{{ t('book.timezone') }}</span><span>{{ tz_label }}</span></li>
+  <li><span class="k">{{ t('summary.hosts') if hosts|length > 1 else t('summary.host') }}</span><span>{{ hosts|map(attribute='name')|join(', ') }}</span></li>
+  <li><span class="k">{{ t('confirm.where') }}</span><span>
+    {% if location.join_url %}<a href="{{ location.join_url }}" target="_blank" rel="noopener">{{ location.join_url }}</a>
+    {% elif location.type == 'custom_url' and location.value %}<a href="{{ location.value }}" target="_blank" rel="noopener">{{ location.value }}</a>
+    {% else %}{{ location_text }}{% endif %}
+    {% if location.host_action_required %}<br><span class="badge badge-warning">{{ t('summary.host_sends_details') }}</span>{% endif %}
+  </span></li>
+  {% if invitee %}<li><span class="k">{{ t('summary.invitee') }}</span><span>{{ invitee.name }} &lt;{{ invitee.email }}&gt;{% if invitee.guests_json %}<br><span class="muted">{{ t('summary.guests', list=invitee.guests_json|join(', ')) }}</span>{% endif %}</span></li>{% endif %}
+  {% if snap.price_minor %}<li><span class="k">{{ t('summary.payment') }}</span><span>{{ snap.price_minor|money(snap.currency) }} · {{ (b.payment_status or 'pending')|replace('_', ' ') }}</span></li>{% endif %}
+</ul>

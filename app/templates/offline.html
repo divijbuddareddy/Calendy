@@ -1,0 +1,11 @@
+{% extends "public_base.html" %}
+{% block title %}Offline · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="public-wrap" style="max-width:520px;text-align:center;padding-top:60px">
+  <div class="brand" style="justify-content:center"><span class="brand-mark">A</span> {{ app_name }}</div>
+  <h1 style="margin-top:18px">You're offline</h1>
+  <p class="muted">We can't reach the server right now. Your meetings and links are safe. Reconnect to see the latest schedule.
+    Nothing is shown as booked until the server confirms it.</p>
+  <button class="btn btn-primary" onclick="location.reload()">Try again</button>
+</div>
+{% endblock %}

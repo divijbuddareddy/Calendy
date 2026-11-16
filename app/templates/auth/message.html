@@ -1,0 +1,13 @@
+{% extends "public_base.html" %}
+{% block title %}{{ title }} · {{ app_name }}{% endblock %}
+{% block head %}{% include "auth/_auth_head.html" %}{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <a class="brand" href="/"><span class="brand-mark">A</span> {{ app_name }}</a>
+  <div class="card auth-card" style="text-align:center">
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ message }}</p>
+    <a class="btn btn-primary" href="/login">Go to log in</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}System health{% endblock %}
+{% macro retry(kind, id) %}
+<form method="post" action="/app/admin/health/{{ kind }}/{{ id }}/retry{{ '?scope=platform' if platform }}" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Retry</button></form>
+{% endmacro %}
+{% block content %}
+{% include "app/admin/_tabs.html" %}
+<div class="spread mb">
+  <p class="muted" style="margin:0">{% if platform %}Platform-wide view (access is audited).{% else %}Showing this workspace only.{% endif %}</p>
+  {% if user.is_platform_admin %}<a class="btn btn-sm" href="/app/admin/health{{ '' if platform else '?scope=platform' }}">{{ 'Workspace view' if platform else 'Platform view' }}</a>{% endif %}
+</div>
+<div class="grid grid-4">
+  <div class="card stat"><div class="num">{{ backlog }}</div><div class="lbl">Outbox backlog{% if oldest %}<br><small>oldest {{ oldest | dt(user.default_timezone) }}</small>{% endif %}</div></div>
+  <div class="card stat"><div class="num">{{ failed_events|length }}</div><div class="lbl">Failing events</div></div>
+  <div class="card stat"><div class="num">{{ failed_jobs|length }}</div><div class="lbl">Failed notifications</div></div>
+  <div class="card stat"><div class="num">{{ held }}</div><div class="lbl">Held bookings{% if stale_held %}<br><small>{{ stale_held }} past expiry</small>{% endif %}</div></div>
+</div>
+
+<section class="card mt"><h2>Failing outbox events</h2>
+  {% if failed_events %}<div class="table-wrap"><table class="table"><thead><tr><th>Topic</th><th>Created</th><th>Attempts</th><th>Error</th><th></th></tr></thead><tbody>
+  {% for e in failed_events %}<tr><td><code>{{ e.topic }}</code></td><td>{{ e.created_at | dt(user.default_timezone) }}</td><td>{{ e.attempts }}</td>
+    <td><small>{{ (e.last_error or '')[:160] }}</small></td><td>{{ retry('outbox', e.id) }}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="empty">No failing events.</p>{% endif %}
+</section>
+
+<section class="card"><h2>Failed notifications</h2>
+  {% if failed_jobs %}<div class="table-wrap"><table class="table"><thead><tr><th>Trigger</th><th>Recipient</th><th>Attempts</th><th>Error</th><th></th></tr></thead><tbody>
+  {% for j in failed_jobs %}<tr><td>{{ j.trigger }} <span class="badge">{{ j.channel }}</span></td><td>{{ j.recipient }}</td><td>{{ j.attempts }}</td>
+    <td><small>{{ (j.error or '')[:160] }}</small></td><td>{{ retry('notification', j.id) }}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="empty">No failed notifications.</p>{% endif %}
+</section>
+
+<section class="card"><h2>Dead webhook deliveries</h2>
+  {% if dead_hooks %}<div class="table-wrap"><table class="table"><thead><tr><th>Topic</th><th>Status</th><th>Attempts</th><th>Response</th><th></th></tr></thead><tbody>
+  {% for d in dead_hooks %}<tr><td><code>{{ d.topic }}</code></td><td><span class="badge badge-danger">{{ d.status }}</span></td><td>{{ d.attempts }}</td>
+    <td><small>{{ d.response_code or '' }} {{ (d.response_body or '')[:120] }}</small></td><td>{{ retry('webhook', d.id) }}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="empty">No dead deliveries.</p>{% endif %}
+</section>
+
+{% if user.is_platform_admin %}
+<section class="card"><h2>Provider webhook dead-letters</h2>
+  {% if inbox_dead %}<div class="table-wrap"><table class="table"><thead><tr><th>Provider</th><th>Event</th><th>Attempts</th><th>Error</th><th></th></tr></thead><tbody>
+  {% for i in inbox_dead %}<tr><td>{{ i.provider }}</td><td><small>{{ i.external_event_id }}</small></td><td>{{ i.attempts }}</td>
+    <td><small>{{ (i.last_error or '')[:160] }}</small></td><td>{{ retry('inbox', i.id) }}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="empty">Inbox is clean.</p>{% endif %}
+</section>
+{% endif %}
+
+<section class="card"><h2>Calendar connections in error</h2>
+  {% if cal_errors %}<table class="table"><thead><tr><th>User</th><th>Provider</th><th>Account</th><th>Error</th></tr></thead><tbody>
+  {% for c in cal_errors %}<tr><td>{{ users.get(c.user_id, c.user_id) }}</td><td>{{ c.provider }}</td><td>{{ c.account_email or '' }}</td><td><small>{{ (c.last_error or '')[:160] }}</small></td></tr>{% endfor %}
+  </tbody></table><p class="help">Ask the user to reconnect from Integrations.</p>{% else %}<p class="empty">All calendar connections healthy.</p>{% endif %}
+</section>
+{% endblock %}

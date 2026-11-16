@@ -1,0 +1,14 @@
+<div class="page-head">
+  <div>
+    <h1>Integrations</h1>
+    <p class="muted" style="margin:0">Connect calendars, video and payments, and build on {{ app_name }} with webhooks, the API and embeds.</p>
+  </div>
+</div>
+<nav class="tabs" aria-label="Integration sections">
+  <a href="/app/integrations" class="{{ 'active' if tab == 'calendars' }}">Calendars, video &amp; payments</a>
+  <a href="/app/integrations/webhooks" class="{{ 'active' if tab == 'webhooks' }}">Webhooks {% if not has_feature(workspace, 'webhooks') %}<span class="badge">Upgrade</span>{% endif %}</a>
+  <a href="/app/integrations/api-keys" class="{{ 'active' if tab == 'api' }}">API keys {% if not has_feature(workspace, 'api') %}<span class="badge">Upgrade</span>{% endif %}</a>
+  <a href="/app/integrations/oauth-apps" class="{{ 'active' if tab == 'oauth' }}">OAuth apps</a>
+  <a href="/embed/demo" class="{{ 'active' if tab == 'embed' }}">Embed</a>
+  <a href="/api/docs" target="_blank" rel="noopener">API docs ↗</a>
+</nav>

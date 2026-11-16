@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}{{ ev.name if ev else 'Meeting' }}{% endblock %}
+{% block head %}
+<style>
+  .timeline { list-style:none; padding:0; margin:0; border-left:2px solid var(--border); }
+  .timeline li { position:relative; padding:0 0 14px 16px; }
+  .timeline li::before { content:""; position:absolute; left:-6px; top:5px; width:10px; height:10px; border-radius:50%; background:var(--primary); }
+  dl.kv { display:grid; grid-template-columns:140px 1fr; gap:8px 12px; margin:0; }
+  dl.kv dt { color:var(--muted); font-weight:600; font-size:.88rem; }
+  dl.kv dd { margin:0; word-break:break-word; }
+  .actions form { margin:0; }
+</style>
+{% endblock %}
+{% block content %}
+{% set inv = b.invitees[0] if b.invitees else None %}
+<div class="page-head">
+  <div>
+    <a href="/app/scheduled" class="muted">← Scheduled events</a>
+    <h1 style="margin-top:6px" class="row"><span class="color-dot" style="background:{{ ev.color if ev else '#999' }};width:16px;height:16px"></span>
+      {{ snap.name or (ev.name if ev else 'Meeting') }}{% if inv %} with {{ inv.name }}{% endif %}</h1>
+    <p class="muted" style="margin:0">{{ b.start_at|dt(tz) }} – {{ b.end_at|dt(tz, '%H:%M') }}</p>
+  </div>
+  <div class="row">
+    {% if b.status == 'confirmed' %}<span class="badge badge-success">Confirmed</span>
+    {% elif b.status == 'cancelled' %}<span class="badge badge-danger">Cancelled</span>
+    {% elif b.status == 'rescheduled' %}<span class="badge">Rescheduled</span>
+    {% else %}<span class="badge badge-warning">{{ b.status|replace('_',' ')|capitalize }}</span>{% endif %}
+    {% if b.no_show %}<span class="badge badge-warning">No-show</span>{% endif %}
+  </div>
+</div>
+
+{% if b.conflict_flag %}<div class="alert alert-error" role="alert"><strong>Calendar conflict.</strong> {{ b.conflict_detail or 'This meeting overlaps another event on your calendar.' }} Consider rescheduling.</div>{% endif %}
+{% if b.cancellation_requested_at and b.status == 'confirmed' %}
+<div class="alert alert-warning spread" role="alert">
+  <span><strong>Cancellation requested</strong> by the invitee {{ b.cancellation_requested_at|dt(tz) }}{% if b.cancel_reason %} — “{{ b.cancel_reason }}”{% endif %}.</span>
+  <span class="row">
+    <form method="post" action="/app/scheduled/{{ b.id }}/approve-cancel" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-primary">Approve</button></form>
+    <form method="post" action="/app/scheduled/{{ b.id }}/decline-cancel" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm">Decline</button></form>
+  </span>
+</div>{% endif %}
+{% if related.rescheduled_to_id %}<div class="alert alert-info">This meeting was rescheduled. <a href="/app/scheduled/{{ related.rescheduled_to_id.id }}">View the new booking →</a></div>{% endif %}
+{% if related.rescheduled_from_id %}<div class="alert alert-info">Rescheduled from <a href="/app/scheduled/{{ related.rescheduled_from_id.id }}">{{ related.rescheduled_from_id.start_at|dt(tz) }}</a>.</div>{% endif %}
+
+<div class="grid" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr);align-items:start" id="detail-grid">
+  <div>
+    <div class="card">
+      <h2>Details</h2>
+      <dl class="kv">
+        <dt>When</dt><dd>{{ b.start_at|dt(tz) }} – {{ b.end_at|dt(tz, '%H:%M') }}{% if inv and inv.timezone and inv.timezone != tz %}<div class="muted">Invitee time: {{ b.start_at|dt(inv.timezone) }}</div>{% endif %}</dd>
+        <dt>Host</dt><dd>{{ host.name if host else '—' }}{% for h in co_hosts if not host or h.id != host.id %}, {{ h.name }}{% endfor %}{% if b.assignment_reason %}<div class="help">{{ b.assignment_reason }}</div>{% endif %}</dd>
+        <dt>Location</dt><dd>{% set loc = b.location_json or {} %}
+          {% if join_url %}<a href="{{ join_url }}" target="_blank" rel="noopener">{{ join_url }}</a> <button class="btn btn-sm" data-copy="{{ join_url }}">Copy</button>
+          {% elif loc.value %}{{ loc.value }}{% else %}{{ (loc.type or 'Not set')|replace('_',' ')|capitalize }}{% endif %}</dd>
+        {% if b.payment_status %}<dt>Payment</dt><dd>{{ b.payment_status|capitalize }}{% for p in payments %} · {{ p.amount_minor|money(p.currency) }} via {{ p.provider }} ({{ p.status }}){% endfor %}</dd>{% endif %}
+        {% if b.source %}<dt>Source</dt><dd>{{ b.source }}{% if b.utm_json %} <span class="muted">{% for k, v in b.utm_json.items() %}{{ k }}={{ v }} {% endfor %}</span>{% endif %}</dd>{% endif %}
+        {% if b.status == 'cancelled' %}<dt>Cancelled</dt><dd>{{ b.cancelled_at|dt(tz) if b.cancelled_at }} by {{ b.cancelled_by or 'unknown' }}{% if b.cancel_reason %}<div class="muted">“{{ b.cancel_reason }}”</div>{% endif %}</dd>{% endif %}
+        {% if cal_events %}<dt>Calendar sync</dt><dd>{% for c in cal_events %}<div>{{ c.provider }} · {% if c.sync_status == 'synced' %}<span class="badge badge-success">Synced</span>{% elif c.sync_status == 'failed' %}<span class="badge badge-danger">Failed</span> <span class="muted">{{ c.last_error or '' }}</span>{% else %}<span class="badge">{{ c.sync_status }}</span>{% endif %}</div>{% endfor %}</dd>{% endif %}
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2>Invitee{{ 's' if b.invitees|length > 1 }}</h2>
+      {% for i in b.invitees %}
+      <dl class="kv" style="{{ 'margin-top:14px;padding-top:14px;border-top:1px solid var(--border)' if not loop.first }}">
+        <dt>Name</dt><dd>{{ i.name }}</dd>
+        <dt>Email</dt><dd><a href="mailto:{{ i.email }}">{{ i.email }}</a></dd>
+        {% if i.phone %}<dt>Phone</dt><dd>{{ i.phone }}</dd>{% endif %}
+        {% if i.company %}<dt>Company</dt><dd>{{ i.company }}</dd>{% endif %}
+        {% if i.timezone %}<dt>Timezone</dt><dd>{{ i.timezone }}</dd>{% endif %}
+        {% if i.guests_json %}<dt>Guests</dt><dd>{{ i.guests_json|join(', ') }}</dd>{% endif %}
+      </dl>
+      {% else %}<p class="muted">No invitee details.</p>{% endfor %}
+      {% if answers %}
+      <h3 class="mt">Answers</h3>
+      <dl class="kv">{% for a in answers %}<dt>{{ a.label }}</dt><dd>{% if a.answer_json is iterable and a.answer_json is not string %}{{ a.answer_json|join(', ') }}{% else %}{{ a.answer_json if a.answer_json not in (None, '') else '—' }}{% endif %}</dd>{% endfor %}</dl>
+      {% endif %}
+    </div>
+
+    <form method="post" action="/app/scheduled/{{ b.id }}/notes" class="card">{{ csrf_input(request) }}
+      <h2>Host notes <span class="muted" style="font-size:.8rem;font-weight:500">(private)</span></h2>
+      <textarea name="host_notes" aria-label="Host notes" placeholder="Prep notes, follow-ups…">{{ b.host_notes or '' }}</textarea>
+      <div class="row mt"><button class="btn btn-primary btn-sm">Save notes</button></div>
+    </form>
+
+    <div class="card">
+      <h2>History</h2>
+      {% if history %}
+      <ul class="timeline">
+        {% for h in history %}
+        <li><strong>{{ h.event_type|replace('_',' ')|capitalize }}</strong> <span class="muted">· {{ h.actor }} · {{ h.created_at|dt(tz) }}</span>
+          {% if h.payload_json and h.payload_json.get('reason') %}<div class="muted">“{{ h.payload_json.reason }}”</div>{% endif %}</li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted" style="margin:0">Booked {{ b.created_at|dt(tz) }}.</p>{% endif %}
+    </div>
+  </div>
+
+  <div class="actions">
+    {% if ctx.role != 'viewer' %}
+    {% if is_upcoming %}
+    <div class="card stack">
+      <h3>Actions</h3>
+      <a class="btn btn-block" href="/app/scheduled/{{ b.id }}/reschedule">Reschedule…</a>
+      <form method="post" action="/app/scheduled/{{ b.id }}/request-reschedule" class="stack">{{ csrf_input(request) }}
+        <details><summary class="muted" style="font-weight:600">Ask invitee to reschedule</summary>
+          <textarea name="message" placeholder="Optional message" aria-label="Message to invitee" class="mt" style="min-height:60px"></textarea>
+          <button class="btn btn-block btn-sm mt">Send reschedule request</button></details>
+      </form>
+      <details><summary class="muted" style="font-weight:600;color:var(--danger)">Cancel meeting</summary>
+        <form method="post" action="/app/scheduled/{{ b.id }}/cancel" class="mt">{{ csrf_input(request) }}
+          <label for="reason">Reason (shared with invitee)</label><textarea id="reason" name="reason" style="min-height:60px"></textarea>
+          <button class="btn btn-danger btn-block mt" data-confirm="Cancel this meeting and notify the invitee?">Cancel meeting</button></form></details>
+    </div>
+    {% endif %}
+    {% if b.status == 'confirmed' and b.start_at <= now %}
+    <div class="card">
+      <h3>Attendance</h3>
+      <form method="post" action="/app/scheduled/{{ b.id }}/no-show">{{ csrf_input(request) }}
+        {% if b.no_show %}<input type="hidden" name="value" value="0"><p class="muted">Marked as no-show {{ b.no_show_marked_at|dt(tz) if b.no_show_marked_at }}.</p><button class="btn btn-block">Undo no-show</button>
+        {% else %}<input type="hidden" name="value" value="1"><button class="btn btn-block">Mark as no-show</button>{% endif %}
+      </form>
+    </div>
+    {% endif %}
+    {% if rr_hosts and is_upcoming %}
+    <form method="post" action="/app/scheduled/{{ b.id }}/reassign" class="card">{{ csrf_input(request) }}
+      <h3>Reassign <span class="badge">Admin</span></h3>
+      <div class="field"><label for="nh">New host</label><select id="nh" name="new_host_id">{% for u in rr_hosts %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="rr">Reason</label><input id="rr" name="reason" placeholder="e.g. Original host out sick"></div>
+      <button class="btn btn-block">Reassign meeting</button>
+    </form>
+    {% endif %}
+    {% endif %}
+    <div class="card">
+      <h3>Links</h3>
+      <div class="stack">
+        {% if urls.reschedule %}<button class="btn btn-sm btn-block" data-copy="{{ urls.reschedule }}">Copy invitee reschedule link</button>{% endif %}
+        {% if urls.cancel %}<button class="btn btn-sm btn-block" data-copy="{{ urls.cancel }}">Copy invitee cancel link</button>{% endif %}
+        {% if event_url %}<a class="btn btn-sm btn-block" href="{{ event_url }}" target="_blank" rel="noopener">Open booking page ↗</a>{% endif %}
+      </div>
+    </div>
+    {% if snap.version %}<p class="help">Booked against event version {{ snap.version }}{% if ev and ev.version != snap.version %} (current: v{{ ev.version }}){% endif %}.</p>{% endif %}
+  </div>
+</div>
+<style>@media (max-width:960px){ #detail-grid { grid-template-columns:1fr !important; } }</style>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "public_base.html" %}
+{% block title %}Complete payment · {{ event_type.name if event_type else 'Meeting' }}{% endblock %}
+{% block content %}
+<div class="public-wrap">
+  <div class="booking-card">
+    {% include "pay/_summary.html" %}
+    <div class="booking-main">
+      <h1>Complete your booking</h1>
+      <p class="muted">This meeting requires payment before it is confirmed. Your time slot is reserved while you check out{% if booking.hold_expires_at %} until <strong>{{ booking.hold_expires_at|dt(tz, "%H:%M") }}</strong>{% endif %}.</p>
+      {% if booking.hold_expires_at %}
+      <div class="alert alert-info" role="status" id="hold-timer" data-expires="{{ booking.hold_expires_at.isoformat() }}Z">Slot held – <span data-countdown>…</span> remaining</div>
+      {% endif %}
+      {% if record and record.status == 'failed' %}<div class="alert alert-error">Your last payment attempt failed. You can try again.</div>{% endif %}
+      <div class="card" style="box-shadow:none">
+        <div class="spread"><span>{{ event_type.name if event_type else 'Meeting' }}</span><strong>{{ amount|money(currency) }}</strong></div>
+        <hr class="divider">
+        <div class="spread"><strong>Total due</strong><strong>{{ amount|money(currency) }} {{ currency }}</strong></div>
+      </div>
+      <form method="post" action="/pay/{{ booking.manage_token }}/start" class="mt">
+        {{ csrf_input(request) }}
+        <button class="btn btn-primary btn-block" type="submit">Pay {{ amount|money(currency) }} securely</button>
+      </form>
+      <details class="mt">
+        <summary>Have a package code?</summary>
+        <form method="post" action="/pay/{{ booking.manage_token }}/redeem" class="row mt">
+          {{ csrf_input(request) }}
+          <label for="pkg-code" class="sr-only">Package code</label>
+          <input id="pkg-code" name="code" required maxlength="40" autocomplete="off" placeholder="ABCD-EFGH-JKLM" style="max-width:220px">
+          <button class="btn" type="submit">Use a package session</button>
+        </form>
+      </details>
+      <p class="help mt">Payments are processed by {{ (event_type.payment_provider or 'stripe')|capitalize }} directly to the host's account. We never see or store your card details.</p>
+      <p class="help"><a href="/pay/{{ booking.manage_token }}/cancel">Cancel and release this time</a></p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  var el=document.getElementById('hold-timer'); if(!el) return;
+  var exp=new Date(el.dataset.expires).getTime(), out=el.querySelector('[data-countdown]');
+  function tick(){ var s=Math.max(0,Math.floor((exp-Date.now())/1000)); out.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+    if(s<=0){ el.className='alert alert-warning'; el.textContent='Your hold has expired. Reload to choose another time.'; clearInterval(h);} }
+  var h=setInterval(tick,1000); tick();
+})();
+</script>
+{% endblock %}

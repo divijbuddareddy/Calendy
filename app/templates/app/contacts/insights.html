@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Relationship insights{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="muted" style="margin:0"><a href="/app/contacts">← Contacts</a></p>
+    <h1>Relationship insights</h1>
+    <p class="muted">Meetings per company. Open a contact to see the same numbers for one person.</p>
+  </div>
+</div>
+<section class="card">
+  {% if rows %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Company</th><th>People</th><th>Meetings</th><th>Upcoming</th><th>Cancel rate</th><th>No-show rate</th><th>Last meeting</th><th>Next meeting</th><th>Top event types</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td><a href="/app/contacts?q={{ r.company|urlencode }}">{{ r.company }}</a></td>
+        <td>{{ r.contacts }}</td>
+        <td>{{ r.meetings }}</td>
+        <td>{{ r.upcoming }}</td>
+        <td>{{ '%.0f%%'|format(r.cancel_rate) if r.cancel_rate is not none else '—' }}</td>
+        <td>{{ '%.0f%%'|format(r.no_show_rate) if r.no_show_rate is not none else '—' }}</td>
+        <td class="muted">{{ r.last_meeting|dt(user.default_timezone) if r.last_meeting else '—' }}</td>
+        <td class="muted">{{ r.next_meeting|dt(user.default_timezone) if r.next_meeting else '—' }}</td>
+        <td>{% for t in r.top_event_types %}{{ t.name }} ({{ t.count }}){{ ', ' if not loop.last }}{% else %}—{% endfor %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<div class="empty">No company data yet. Companies come from contact profiles and booking answers.</div>{% endif %}
+</section>
+{% endblock %}

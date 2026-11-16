@@ -1,0 +1,28 @@
+{% extends "emails/base.html" %}
+{% block body %}
+{% if audience == 'host' %}
+  <h1 style="font-size:20px;margin:0 0 8px;">New booking{% if booking.status == 'pending' %} (awaiting your approval){% endif %}</h1>
+  <p style="margin:0 0 4px;">{{ invitees[0].name if invitees else 'Someone' }} scheduled <strong>{{ event_name }}</strong> with you.</p>
+{% else %}
+  <h1 style="font-size:20px;margin:0 0 8px;">{% if booking.status == 'pending' %}Booking requested{% else %}You're booked!{% endif %}</h1>
+  <p style="margin:0 0 4px;">Hi {{ invitees[0].name if invitees else 'there' }}, your meeting with {{ host.name if host else 'your host' }} is {% if booking.status == 'pending' %}awaiting confirmation{% else %}confirmed{% endif %}.</p>
+{% endif %}
+{% include "emails/_details.html" %}
+{% if audience == 'host' and answers %}
+  <h3 style="font-size:14px;margin:16px 0 6px;">Answers</h3>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="font-size:14px;">
+  {% for a in answers %}<tr><td style="padding:2px 12px 2px 0;color:#5b6380;vertical-align:top;">{{ a.label }}</td><td style="padding:2px 0;">{% if a.answer_json is string %}{{ a.answer_json }}{% elif a.answer_json is sequence %}{{ a.answer_json|join(', ') }}{% else %}{{ a.answer_json }}{% endif %}</td></tr>{% endfor %}
+  </table>
+{% endif %}
+<p style="margin:18px 0 8px;">
+  <a href="{{ gcal_url }}" style="display:inline-block;padding:9px 14px;background:#3b47d6;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">Add to Google Calendar</a>
+  <span style="color:#5b6380;font-size:13px;margin-left:6px;">or open the attached .ics file (Outlook, Apple Calendar)</span>
+</p>
+{% if audience == 'host' %}
+  <p style="font-size:14px;margin:14px 0 0;"><a href="{{ app_link }}" style="color:#3b47d6;">View booking in {{ app_name }}</a></p>
+{% else %}
+  <p style="font-size:14px;margin:14px 0 0;">Need to make a change?
+    <a href="{{ links.reschedule_url }}" style="color:#3b47d6;">Reschedule</a> ·
+    <a href="{{ links.cancel_url }}" style="color:#b42318;">Cancel</a></p>
+{% endif %}
+{% endblock %}

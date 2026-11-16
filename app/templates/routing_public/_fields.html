@@ -1,0 +1,33 @@
+{# expects rf, values (dict), errors (list) #}
+{% if errors %}
+<div class="alert alert-error" role="alert"><ul style="margin:0;padding-left:18px">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+{% endif %}
+{% for f in rf.form_schema_json or [] %}
+  {% set v = values.get(f.id) %}
+  <div class="field">
+  {% if f.type == 'consent' %}
+    <label class="check"><input type="checkbox" name="{{ f.id }}" value="1" {{ 'checked' if v }} {{ 'required' if f.required }}> {{ f.label }}{% if f.required %} <span aria-hidden="true">*</span>{% endif %}</label>
+  {% elif f.type in ('radio', 'checkbox') %}
+    <fieldset style="border:0;padding:0;margin:0">
+      <legend style="font-weight:600;font-size:.88rem;margin-bottom:4px">{{ f.label }}{% if f.required %} <span aria-hidden="true">*</span>{% endif %}</legend>
+      {% for o in f.options or [] %}
+      <label class="check"><input type="{{ f.type }}" name="{{ f.id }}" value="{{ o }}"
+        {{ 'checked' if (v == o or (v is iterable and v is not string and o in v)) }} {{ 'required' if f.required and f.type == 'radio' }}> {{ o }}</label>
+      {% endfor %}
+    </fieldset>
+  {% else %}
+    <label for="rf-{{ f.id }}">{{ f.label }}{% if f.required %} <span aria-hidden="true">*</span>{% endif %}</label>
+    {% if f.type == 'select' %}
+      <select id="rf-{{ f.id }}" name="{{ f.id }}" {{ 'required' if f.required }}>
+        <option value="">Select…</option>
+        {% for o in f.options or [] %}<option value="{{ o }}" {{ 'selected' if v == o }}>{{ o }}</option>{% endfor %}
+      </select>
+    {% else %}
+      <input id="rf-{{ f.id }}" name="{{ f.id }}" value="{{ v if v is string else '' }}" {{ 'required' if f.required }}
+        type="{{ {'email':'email','phone':'tel','number':'number'}.get(f.type, 'text') }}"
+        {% if f.type == 'email' %}autocomplete="email"{% elif f.type == 'phone' %}autocomplete="tel"{% elif f.type == 'number' %}step="any"{% endif %}>
+    {% endif %}
+  {% endif %}
+  {% if f.help %}<p class="help">{{ f.help }}</p>{% endif %}
+  </div>
+{% endfor %}

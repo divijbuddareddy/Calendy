@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Billing{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Billing</h1>
+    <p class="muted" style="margin:0">Your plan, seats and usage. Seats are the workspace's active members and update automatically.{% if not stripe %} <span class="badge badge-warning">Test mode – no real charges</span>{% endif %}</p>
+  </div>
+  <a class="btn" href="/app/settings?tab=billing">Plan features</a>
+</div>
+
+<section class="card">
+  <h2>Current subscription</h2>
+  <div class="grid grid-4">
+    <div class="stat"><div class="muted">Plan</div><strong style="font-size:1.3rem">{{ plans[workspace.plan_id].label if workspace.plan_id in plans else workspace.plan_id }}</strong></div>
+    <div class="stat"><div class="muted">Status</div><strong style="font-size:1.3rem">{{ (sub.status if sub and paid else 'not subscribed')|replace('_', ' ')|capitalize }}</strong></div>
+    <div class="stat"><div class="muted">Seats</div><strong style="font-size:1.3rem">{{ sub.seats if sub and paid else seats }}</strong></div>
+    <div class="stat"><div class="muted">{{ 'Renews' if paid and not acct.cancel_at_period_end else 'Ends' if paid else 'Monthly cost' }}</div>
+      <strong style="font-size:1.3rem">{% if paid and sub.period_end %}{{ sub.period_end|dt(user.default_timezone, '%d %b %Y') }}{% elif paid %}—{% else %}{{ 0|money('USD') }}{% endif %}</strong></div>
+  </div>
+  {% if paid %}<p class="muted mt">{{ monthly_total(sub.plan, sub.seats)|money('USD') }} / month ({{ plans[sub.plan].price_minor|money('USD') }} × {{ sub.seats }} seat{{ 's' if sub.seats != 1 }}).</p>{% endif %}
+  {% if paid and acct.cancel_at_period_end %}
+  <div class="alert alert-warning mt">Your subscription is cancelled and ends on {{ sub.period_end|dt(user.default_timezone, '%d %b %Y') if sub.period_end else 'the period end' }}; the workspace then moves to Free.
+    {% if is_owner %}<form method="post" action="/app/billing/resume" style="display:inline">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Keep my subscription</button></form>{% endif %}</div>
+  {% elif paid and acct.scheduled_plan %}
+  <div class="alert alert-info mt">Your plan changes to {{ plans[acct.scheduled_plan].label }} on {{ sub.period_end|dt(user.default_timezone, '%d %b %Y') if sub.period_end else 'the period end' }}.
+    {% if is_owner %}<form method="post" action="/app/billing/resume" style="display:inline">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Cancel the change</button></form>{% endif %}</div>
+  {% elif paid and is_owner %}
+  <form method="post" action="/app/billing/cancel" class="mt">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Cancel at the end of the billing period?">Cancel subscription</button></form>
+  {% endif %}
+  {% if sub and sub.status == 'past_due' %}<div class="alert alert-error mt">Your last payment failed. Update your payment method in Stripe to keep paid features.</div>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Plans</h2>
+  <div class="grid grid-4">
+    {% for pid in order if pid in plans %}{% set p = plans[pid] %}
+    <div class="card" style="box-shadow:none;{{ 'border:2px solid var(--primary)' if workspace.plan_id == pid }}">
+      <h3 style="margin-top:0">{{ p.label }}</h3>
+      <p><strong style="font-size:1.3rem">{% if p.price_minor is none %}Custom{% elif p.price_minor == 0 %}Free{% else %}{{ p.price_minor|money('USD') }}{% endif %}</strong>{% if p.price_minor %} <span class="muted">/ seat / month</span>{% endif %}</p>
+      {% if workspace.plan_id == pid and (paid or pid == 'free') %}
+        <span class="badge badge-success">Current plan</span>
+      {% elif p.price_minor is none %}
+        <a class="btn btn-sm btn-block" href="mailto:sales@example.com">Contact sales</a>
+      {% elif is_owner %}
+        <form method="post" action="/app/billing/plan">{{ csrf_input(request) }}<input type="hidden" name="plan" value="{{ pid }}">
+          <button class="btn btn-sm btn-block {{ 'btn-primary' if rank(pid) > rank(sub.plan if paid else 'free') }}" type="submit">
+            {% if not paid and p.price_minor %}Subscribe{% elif rank(pid) > rank(sub.plan if paid else 'free') %}Upgrade{% else %}Downgrade at period end{% endif %}
+          </button></form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% if not paid and workspace.plan_id != 'free' %}<p class="help mt">You're exploring {{ plans[workspace.plan_id].label if workspace.plan_id in plans else workspace.plan_id }} without a paid subscription. Subscribe to keep these features.</p>{% endif %}
+  {% if not is_owner %}<p class="help mt">Only the workspace owner can change the plan.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Usage</h2>
+  <p class="muted">Since {{ period_start|dt(user.default_timezone, '%d %b %Y') }} (this month) and all time.</p>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Meter</th><th style="text-align:right">This month</th><th style="text-align:right">All time</th></tr></thead>
+    <tbody>
+    {% for u in usage %}<tr><td>{{ u.label }}</td><td style="text-align:right">{{ '{:,}'.format(u.period) }}</td><td style="text-align:right">{{ '{:,}'.format(u.total) }}</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endblock %}

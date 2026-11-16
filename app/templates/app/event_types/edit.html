@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ ev.name }}{% endblock %}
+{% macro dis(f) %}{{ 'disabled' if locked(f) }}{% endmacro %}
+{% macro lock(f) %}{% if locked(f) %} <span class="badge badge-primary" title="Locked by your workspace admin">🔒 Locked</span>{% endif %}{% endmacro %}
+{% block head %}
+<style>
+  .editor { display:grid; grid-template-columns:220px 1fr; gap:20px; align-items:start; }
+  .editor-nav { display:flex; flex-direction:column; gap:2px; position:sticky; top:80px; }
+  .editor-nav a { padding:8px 12px; border-radius:var(--radius-sm); color:var(--muted); font-weight:600; }
+  .editor-nav a.active { background:var(--primary-soft); color:var(--primary); }
+  .editor-nav a:hover { text-decoration:none; background:var(--surface-2); }
+  .loc-row, .q-row { display:flex; gap:8px; align-items:flex-start; margin-bottom:8px; }
+  .loc-row select { max-width:260px; }
+  .host-table td { vertical-align:middle; }
+  .host-table input[type=number] { max-width:90px; }
+  @media (max-width: 860px) { .editor { grid-template-columns:1fr; } .editor-nav { position:static; flex-direction:row; overflow-x:auto; } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a href="/app/event-types" class="muted">← Event types</a>
+    <h1 style="margin-top:6px" class="row"><span class="color-dot" style="background:{{ ev.color }};width:16px;height:16px"></span> {{ ev.name }}
+      {% if ev.status == 'active' %}<span class="badge badge-success">Active</span>{% elif ev.status == 'paused' %}<span class="badge badge-warning">Paused</span>{% else %}<span class="badge">Archived</span>{% endif %}
+      {% if ev.single_use %}<span class="badge">Single-use</span>{% endif %}{% if ev.is_one_off %}<span class="badge">One-off</span>{% endif %}
+    </h1>
+    <p class="muted" style="margin:0">{{ kinds[ev.kind] }} · v{{ ev.version }} · <code>{{ url }}</code></p>
+  </div>
+  <div class="row">
+    <button class="btn" data-copy="{{ url }}">Copy link</button>
+    <a class="btn" href="{{ path }}" target="_blank" rel="noopener">Preview as invitee ↗</a>
+    <form method="post" action="/app/event-types/{{ ev.id }}/status" style="margin:0">{{ csrf_input(request) }}
+      <input type="hidden" name="next" value="/app/event-types/{{ ev.id }}/edit?section={{ section }}">
+      {% if ev.status == 'active' %}<input type="hidden" name="action" value="pause"><button class="btn">Pause</button>
+      {% else %}<input type="hidden" name="action" value="activate"><button class="btn btn-primary">Activate</button>{% endif %}
+    </form>
+  </div>
+</div>
+{% if ev.locked_fields_json %}<div class="alert alert-info">This event type is managed by your workspace admin. Locked fields can't be changed{% if ctx.can('admin') %} by members (you're an admin, so you can edit them){% endif %}.</div>{% endif %}
+
+<div class="editor">
+  <nav class="editor-nav card" style="padding:8px" aria-label="Event type sections">
+    {% for s in sections %}
+      {% if s != 'hosts' or ev.kind != 'one_on_one' %}
+      <a href="?section={{ s }}" class="{{ 'active' if s == section }}">{{ section_labels[s] }}</a>
+      {% endif %}
+    {% endfor %}
+  </nav>
+
+  <div>
+  {% if section == 'questions' %}
+    {# ------------------------------------------------ questions #}
+    <div class="card">
+      <div class="card-head"><h2 style="margin:0">Invitee questions{{ lock('questions') }}</h2></div>
+      <p class="muted">Name and email are always collected. Add custom questions below; use the prefill key to prefill answers from the booking URL (e.g. <code>?a1=Acme</code>).</p>
+      {% if not ev.questions %}<div class="empty">No custom questions yet.</div>{% endif %}
+      {% for q in ev.questions %}
+      <details class="card" style="padding:12px 16px">
+        <summary class="spread"><span>{{ loop.index }}. {{ q.label }} {% if q.required %}<span class="badge badge-danger">Required</span>{% endif %} <span class="badge">{{ question_types[q.type] }}</span></span>
+          {% if not locked('questions') %}
+          <span class="row">
+            <form method="post" action="/app/event-types/{{ ev.id }}/questions/{{ q.id }}/move?dir=up" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-ghost" aria-label="Move up" {{ 'disabled' if loop.first }}>↑</button></form>
+            <form method="post" action="/app/event-types/{{ ev.id }}/questions/{{ q.id }}/move?dir=down" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-ghost" aria-label="Move down" {{ 'disabled' if loop.last }}>↓</button></form>
+            <form method="post" action="/app/event-types/{{ ev.id }}/questions/{{ q.id }}/delete" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" data-confirm="Delete this question?">Delete</button></form>
+          </span>{% endif %}
+        </summary>
+        <form method="post" action="/app/event-types/{{ ev.id }}/questions/{{ q.id }}" class="mt">{{ csrf_input(request) }}
+          {% with q=q %}{% include "app/event_types/_question_fields.html" %}{% endwith %}
+          {% if not locked('questions') %}<button class="btn btn-primary btn-sm">Save question</button>{% endif %}
+        </form>
+      </details>
+      {% endfor %}
+    </div>
+    {% if not locked('questions') %}
+    <form method="post" action="/app/event-types/{{ ev.id }}/questions" class="card">{{ csrf_input(request) }}
+      <h3>Add a question</h3>
+      {% with q=None %}{% include "app/event_types/_question_fields.html" %}{% endwith %}
+      <button class="btn btn-primary">Add question</button>
+    </form>
+    {% endif %}
+  {% else %}
+  <form method="post" action="/app/event-types/{{ ev.id }}?section={{ section }}" class="card" id="section-form">
+    {{ csrf_input(request) }}
+    <input type="hidden" name="section" value="{{ section }}">
+
+    {% if section == 'basics' %}
+      <h2>Basics</h2>
+      <div class="grid grid-2">
+        <div class="field"><label for="name">Name{{ lock('name') }}</label><input id="name" name="name" value="{{ ev.name }}" required {{ dis('name') }}></div>
+        <div class="field"><label for="slug">URL slug{{ lock('slug') }}</label><input id="slug" name="slug" value="{{ ev.slug }}" required pattern="[a-z0-9-]+" {{ dis('slug') }}>
+          <div class="help">Must be unique among your event types.</div></div>
+      </div>
+      <div class="field"><label for="description">Description{{ lock('description') }}</label><textarea id="description" name="description" {{ dis('description') }}>{{ ev.description or '' }}</textarea></div>
+      <div class="grid grid-3">
+        <div class="field"><label for="color">Colour{{ lock('color') }}</label><input type="color" id="color" name="color" value="{{ ev.color }}" {{ dis('color') }}></div>
+        <div class="field"><label for="kind">Format{{ lock('kind') }}</label>
+          <select id="kind" name="kind" {{ dis('kind') }}>
+            {% for k, label in kinds.items() %}{% set ok = (k not in kind_feature) or has_feature(workspace, kind_feature[k]) %}
+            <option value="{{ k }}" {{ 'selected' if ev.kind == k }} {{ 'disabled' if not ok and ev.kind != k }}>{{ label }}{{ ' (upgrade)' if not ok }}</option>{% endfor %}
+          </select></div>
+        <div class="field"><label for="duration">Default duration (min){{ lock('duration') }}</label><input type="number" id="duration" name="duration" min="5" max="1440" value="{{ ev.duration }}" {{ dis('duration') }}></div>
+      </div>
+      <fieldset style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px">
+        <legend class="muted" style="font-size:.85rem;padding:0 6px">Multiple durations{{ lock('durations_json') }}</legend>
+        {% if has_feature(workspace, 'multiple_durations') %}
+        <label class="check"><input type="checkbox" name="multiple_durations" value="1" {{ 'checked' if ev.durations_json }} {{ dis('durations_json') }}> Let invitees choose the duration</label>
+        <div class="field mt"><label for="durations">Allowed durations (minutes, comma separated)</label><input id="durations" name="durations" value="{{ ev.durations_json|join(', ') if ev.durations_json else '15, 30, 60' }}" {{ dis('durations_json') }}></div>
+        {% else %}<p class="muted" style="margin:0">Available on Standard and above.</p>{% endif %}
+      </fieldset>
+
+    {% elif section == 'location' %}
+      <h2>Location{{ lock('location_json') }}</h2>
+      <p class="muted">Offer one or more options. If you add several, the invitee chooses. Conferencing links are generated when the booking is confirmed.</p>
+      <div id="locs">
+        {% for l in (ev.location_json or [{'type':'google_meet','value':''}]) %}
+        <div class="loc-row">
+          <select name="loc_type" aria-label="Location type" {{ dis('location_json') }}>{% for k, v in location_types.items() %}<option value="{{ k }}" {{ 'selected' if l.type == k }}>{{ v }}</option>{% endfor %}</select>
+          <input name="loc_value" value="{{ l.value or '' }}" placeholder="Address, link or phone (if needed)" aria-label="Location details" {{ dis('location_json') }}>
+          {% if not locked('location_json') %}<button type="button" class="btn btn-ghost" onclick="this.parentElement.remove()" aria-label="Remove location">✕</button>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% if not locked('location_json') %}<button type="button" class="btn btn-sm" id="add-loc">+ Add location option</button>{% endif %}
+      <template id="loc-tpl"><div class="loc-row"><select name="loc_type" aria-label="Location type">{% for k, v in location_types.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><input name="loc_value" placeholder="Address, link or phone (if needed)" aria-label="Location details"><button type="button" class="btn btn-ghost" onclick="this.parentElement.remove()" aria-label="Remove location">✕</button></div></template>
+      <p class="help mt">Google Meet / Zoom / Teams need the matching integration connected in <a href="/app/integrations">Integrations</a>; otherwise a placeholder link is used.</p>
+
+    {% elif section == 'availability' %}
+      <h2>Availability</h2>
+      {% set custom_on = ev.custom_rules_json %}
+      <fieldset style="border:0;padding:0;margin:0 0 12px"><legend style="font-weight:600;font-size:.88rem;margin-bottom:6px">Availability source{{ lock('schedule_id') }}</legend>
+        <label class="check"><input type="radio" name="availability_source" value="schedule" {{ 'checked' if not custom_on }} {{ dis('schedule_id') }}> Use a schedule</label>
+        <div class="field" style="margin-left:26px;max-width:360px"><select name="schedule_id" aria-label="Schedule" {{ dis('schedule_id') }}>
+          <option value="">Default schedule</option>
+          {% for s in schedules %}<option value="{{ s.id }}" {{ 'selected' if ev.schedule_id == s.id }}>{{ s.name }}{{ ' (default)' if s.is_default }} · {{ s.timezone }}</option>{% endfor %}
+        </select><div class="help"><a href="/app/availability">Manage schedules →</a></div></div>
+        <label class="check"><input type="radio" name="availability_source" value="custom" {{ 'checked' if custom_on }} {{ dis('schedule_id') }}> Custom hours for this event only</label>
+        <div class="card" style="margin:8px 0 0 26px;padding:12px">
+          <p class="help" style="margin-top:0">Enter ranges like <code>09:00-12:00, 13:00-17:00</code>. Leave blank for unavailable. Times are in the owner's timezone.</p>
+          {% for wd in range(7) %}
+          <div class="row" style="margin-bottom:6px"><label for="custom_{{ wd }}" style="width:110px;margin:0">{{ weekdays[wd] }}</label>
+            <input id="custom_{{ wd }}" name="custom_{{ wd }}" value="{{ custom[wd] }}" placeholder="Unavailable" style="flex:1" {{ dis('custom_rules_json') }}></div>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <hr class="divider">
+      <div class="grid grid-3">
+        <div class="field"><label for="slot_interval">Start time increments{{ lock('slot_interval') }}</label>
+          <select id="slot_interval" name="slot_interval" {{ dis('slot_interval') }}><option value="">Same as duration</option>{% for i in [5,10,15,20,30,45,60,90,120] %}<option value="{{ i }}" {{ 'selected' if ev.slot_interval == i }}>{{ i }} min</option>{% endfor %}</select></div>
+        <div class="field"><label for="min_notice_value">Minimum notice{{ lock('min_notice_minutes') }}</label>
+          <div class="row" style="flex-wrap:nowrap"><input type="number" min="0" id="min_notice_value" name="min_notice_value" value="{{ notice_val }}" {{ dis('min_notice_minutes') }}>
+          <select name="min_notice_unit" aria-label="Notice unit" {{ dis('min_notice_minutes') }}>{% for u in ['minutes','hours','days'] %}<option {{ 'selected' if notice_unit == u }}>{{ u }}</option>{% endfor %}</select></div></div>
+        <div class="field"><label for="max_days_ahead">Booking horizon (days ahead){{ lock('max_days_ahead') }}</label><input type="number" min="1" max="730" id="max_days_ahead" name="max_days_ahead" value="{{ ev.max_days_ahead }}" {{ dis('max_days_ahead') }}></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="field"><label for="buffer_before">Buffer before (min){{ lock('buffer_before') }}</label><input type="number" min="0" id="buffer_before" name="buffer_before" value="{{ ev.buffer_before }}" {{ dis('buffer_before') }}></div>
+        <div class="field"><label for="buffer_after">Buffer after (min){{ lock('buffer_after') }}</label><input type="number" min="0" id="buffer_after" name="buffer_after" value="{{ ev.buffer_after }}" {{ dis('buffer_after') }}></div>
+      </div>
+      <h3 class="mt">Booking limits for this event</h3>
+      <div class="grid grid-3">
+        <div class="field"><label for="daily_limit">Max per day</label><input type="number" min="1" id="daily_limit" name="daily_limit" value="{{ ev.daily_limit or '' }}" placeholder="No limit" {{ dis('daily_limit') }}></div>
+        <div class="field"><label for="weekly_limit">Max per week</label><input type="number" min="1" id="weekly_limit" name="weekly_limit" value="{{ ev.weekly_limit or '' }}" placeholder="No limit" {{ dis('weekly_limit') }}></div>
+        <div class="field"><label for="monthly_limit">Max per month</label><input type="number" min="1" id="monthly_limit" name="monthly_limit" value="{{ ev.monthly_limit or '' }}" placeholder="No limit" {{ dis('monthly_limit') }}></div>
+      </div>
+      <p class="help">Host-wide limits across all event types live in <a href="/app/availability">Availability</a>.</p>
+
+    {% elif section == 'hosts' %}
+      <h2>Hosts{{ lock('hosts') }}</h2>
+      {% if ev.kind == 'collective' %}<p class="muted">All <strong>required</strong> hosts must be free for a time to be offered. Optional hosts are invited when available.</p>
+      {% elif ev.kind == 'round_robin' %}<p class="muted">Each booking is assigned to one active host. Higher priority hosts are preferred.</p>
+      {% elif ev.kind == 'group' %}<p class="muted">Invitees share a single slot up to the capacity below.</p>{% endif %}
+      <div class="table-wrap"><table class="table host-table">
+        <thead><tr><th>Host</th><th>Active</th><th>Priority</th>{% if ev.kind == 'collective' %}<th>Required</th>{% endif %}<th>Daily cap</th></tr></thead>
+        <tbody>
+        {% for m in members %}{% set h = hosts.get(m.id) %}
+          <tr>
+            <td><label class="check" style="margin:0"><input type="checkbox" name="host_ids" value="{{ m.id }}" {{ 'checked' if h }} {{ dis('hosts') }}> {{ m.name or m.email }}</label></td>
+            <td><input type="checkbox" name="active_{{ m.id }}" value="1" {{ 'checked' if not h or h.active }} aria-label="Active" {{ dis('hosts') }}></td>
+            <td><input type="number" min="0" max="10" name="priority_{{ m.id }}" value="{{ h.priority if h else 1 }}" aria-label="Priority" {{ dis('hosts') }}></td>
+            {% if ev.kind == 'collective' %}<td><input type="checkbox" name="required_{{ m.id }}" value="1" {{ 'checked' if not h or h.required }} aria-label="Required" {{ dis('hosts') }}></td>{% endif %}
+            <td><input type="number" min="1" name="capacity_{{ m.id }}" value="{{ h.daily_capacity if h and h.daily_capacity else '' }}" placeholder="—" aria-label="Daily capacity" {{ dis('hosts') }}></td>
+          </tr>
+        {% endfor %}
+        </tbody></table></div>
+      {% if ev.kind == 'round_robin' %}
+      <div class="field mt"><label for="rr_strategy">Distribution{{ lock('rr_strategy') }}</label>
+        <select id="rr_strategy" name="rr_strategy" style="max-width:420px" {{ dis('rr_strategy') }}>
+          <option value="availability" {{ 'selected' if ev.rr_strategy == 'availability' }}>Optimise for availability (show any host's free time)</option>
+          <option value="equal" {{ 'selected' if ev.rr_strategy == 'equal' }}>Equal distribution (balance assignments)</option>
+        </select></div>
+      {% else %}<input type="hidden" name="rr_strategy" value="{{ ev.rr_strategy }}">{% endif %}
+      {% if ev.kind == 'group' %}
+      <div class="grid grid-3 mt">
+        <div class="field"><label for="max_invitees">Max invitees per slot{{ lock('max_invitees') }}</label><input type="number" min="2" id="max_invitees" name="max_invitees" value="{{ ev.max_invitees }}" {{ dis('max_invitees') }}></div>
+      </div>
+      <label class="check"><input type="checkbox" name="show_remaining_seats" value="1" {{ 'checked' if ev.show_remaining_seats }} {{ dis('show_remaining_seats') }}> Show remaining seats on the booking page</label>
+      <label class="check"><input type="checkbox" name="waitlist_enabled" value="1" {{ 'checked' if ev.waitlist_enabled }} {{ dis('waitlist_enabled') }}> Enable waitlist when full</label>
+      {% endif %}
+      <div class="field mt"><label for="team_id">Team page{{ lock('team_id') }}</label>
+        <select id="team_id" name="team_id" style="max-width:360px" {{ dis('team_id') }}><option value="">— Personal (your booking page) —</option>
+          {% for t in teams %}<option value="{{ t.id }}" {{ 'selected' if ev.team_id == t.id }}>{{ t.name }} (/team/{{ t.slug }})</option>{% endfor %}</select>
+        <div class="help">Team events are published at /team/&lt;team&gt;/{{ ev.slug }}.</div></div>
+
+    {% elif section == 'confirmation' %}
+      <h2>Notifications &amp; confirmation</h2>
+      <div class="field"><label for="calendar_event_title">Calendar event title{{ lock('calendar_event_title') }}</label>
+        <input id="calendar_event_title" name="calendar_event_title" value="{{ ev.calendar_event_title }}" {{ dis('calendar_event_title') }}>
+        <div class="help">Variables: {% for v in title_vars %}<code>{{ '{' ~ v ~ '}' }}</code> {% endfor %}</div></div>
+      <div class="field"><label for="confirmation_message">Confirmation page message{{ lock('confirmation_json') }}</label>
+        <textarea id="confirmation_message" name="confirmation_message" placeholder="Thanks for booking! Here's what to prepare…" {{ dis('confirmation_json') }}>{{ confirmation.message or '' }}</textarea></div>
+      <div class="field"><label for="redirect_url">Redirect to external page after booking <span class="muted">(optional)</span></label>
+        <input type="url" id="redirect_url" name="redirect_url" value="{{ confirmation.redirect_url or '' }}" placeholder="https://example.com/thanks" {{ dis('confirmation_json') }}>
+        <label class="check mt"><input type="checkbox" name="pass_params" value="1" {{ 'checked' if confirmation.pass_params }} {{ dis('confirmation_json') }}> Pass event and invitee details as query parameters</label></div>
+      <div class="field"><label for="links">Resource links <span class="muted">(one per line: Label | https://…)</span></label>
+        <textarea id="links" name="links" {{ dis('confirmation_json') }}>{% for l in confirmation.links or [] %}{{ l.label }} | {{ l.url }}
+{% endfor %}</textarea></div>
+      <p class="help">Reminder and follow-up emails are configured in <a href="/app/workflows">Workflows</a>.</p>
+
+    {% elif section == 'policy' %}
+      <h2>Cancellation &amp; rescheduling policy{{ lock('cancellation_policy_json') }}</h2>
+      <label class="check"><input type="checkbox" name="allow_cancel" value="1" {{ 'checked' if policy.get('allow_cancel', True) }} {{ dis('cancellation_policy_json') }}> Invitees can cancel</label>
+      <label class="check"><input type="checkbox" name="allow_reschedule" value="1" {{ 'checked' if policy.get('allow_reschedule', True) }} {{ dis('cancellation_policy_json') }}> Invitees can reschedule</label>
+      <label class="check"><input type="checkbox" name="require_reason" value="1" {{ 'checked' if policy.require_reason }} {{ dis('cancellation_policy_json') }}> Require a reason when cancelling</label>
+      <label class="check"><input type="checkbox" name="host_approval" value="1" {{ 'checked' if policy.host_approval }} {{ dis('cancellation_policy_json') }}> Cancellations require host approval</label>
+      <div class="field mt" style="max-width:320px"><label for="policy_min_notice">Changes allowed up to (minutes before start)</label>
+        <input type="number" min="0" id="policy_min_notice" name="policy_min_notice" value="{{ policy.min_notice_minutes or 0 }}" {{ dis('cancellation_policy_json') }}></div>
+      <div class="field"><label for="policy_text">Policy text shown to invitees</label><textarea id="policy_text" name="policy_text" {{ dis('cancellation_policy_json') }}>{{ policy.policy_text or '' }}</textarea></div>
+      <hr class="divider">
+      <label class="check"><input type="checkbox" name="requires_email_verification" value="1" {{ 'checked' if ev.requires_email_verification }} {{ dis('requires_email_verification') }} {{ 'disabled' if not has_feature(workspace, 'email_verification') }}> Require invitees to verify their email with a one-time code before booking</label>
+
+    {% elif section == 'payment' %}
+      <h2>Payment{{ lock('price_minor') }}</h2>
+      {% if not has_feature(workspace, 'payments') %}
+        <div class="alert alert-info">Collecting payments is available on Standard and above. <a href="/app/settings?tab=billing">Upgrade →</a></div>
+      {% else %}
+      <label class="check"><input type="checkbox" name="payment_enabled" value="1" {{ 'checked' if ev.price_minor }} {{ dis('price_minor') }}> Require payment to book</label>
+      <div class="grid grid-3 mt">
+        <div class="field"><label for="price">Price</label><input type="number" step="0.01" min="0" id="price" name="price" value="{{ '%.2f'|format(ev.price_minor / 100) if ev.price_minor else '' }}" {{ dis('price_minor') }}></div>
+        <div class="field"><label for="currency">Currency</label><select id="currency" name="currency" {{ dis('price_minor') }}>{% for c in currencies %}<option {{ 'selected' if ev.currency == c }}>{{ c }}</option>{% endfor %}</select></div>
+        <div class="field"><label for="payment_provider">Provider</label><select id="payment_provider" name="payment_provider" {{ dis('price_minor') }}><option value="stripe" {{ 'selected' if ev.payment_provider == 'stripe' }}>Stripe</option><option value="paypal" {{ 'selected' if ev.payment_provider == 'paypal' }}>PayPal</option></select></div>
+      </div>
+      <div class="field"><label for="payment_description">Description on receipt</label><input id="payment_description" name="payment_description" value="{{ ev.payment_description or '' }}" {{ dis('price_minor') }}></div>
+      <p class="help">Connect a payment account in <a href="/app/integrations">Integrations</a>. Bookings stay pending until payment succeeds.</p>
+      {% endif %}
+
+    {% elif section == 'permissions' %}
+      <h2>Permissions &amp; visibility</h2>
+      <fieldset style="border:0;padding:0;margin:0 0 12px"><legend style="font-weight:600;font-size:.88rem;margin-bottom:6px">Who can find and book this event?{{ lock('visibility') }}</legend>
+        {% for v, label, help in [('public','Public','Listed on your booking page'),('secret','Secret','Bookable via direct link only, not listed'),('private','Private','Only you (and people you share with) can see it in the app; not bookable publicly'),('team','Team-visible','Visible to everyone in the workspace')] %}
+        <label class="check"><input type="radio" name="visibility" value="{{ v }}" {{ 'checked' if ev.visibility == v }} {{ dis('visibility') }}> <span><strong>{{ label }}</strong> <span class="muted">— {{ help }}</span></span></label>
+        {% endfor %}
+      </fieldset>
+      <div class="field"><label>Teammates who can edit{{ lock('shared_with_json') }}</label>
+        {% for m in members if m.id != ev.owner_user_id %}
+          <label class="check"><input type="checkbox" name="shared_with" value="{{ m.id }}" {{ 'checked' if m.id in (ev.shared_with_json or []) }} {{ dis('shared_with_json') }}> {{ m.name or m.email }}</label>
+        {% else %}<p class="muted">No other members in this workspace yet. <a href="/app/teams">Invite teammates →</a></p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <hr class="divider">
+    <div class="spread">
+      <span class="help">Saving bumps the version; existing bookings keep their original details.</span>
+      <button class="btn btn-primary" type="submit">Save changes</button>
+    </div>
+  </form>
+  {% endif %}
+
+  {% if section == 'basics' %}
+  <div class="card">
+    <h3>Share &amp; embed</h3>
+    <div class="row"><code style="flex:1;word-break:break-all">{{ url }}</code><button class="btn btn-sm" data-copy="{{ url }}">Copy link</button></div>
+    <details class="mt"><summary>Embed code</summary>
+      <p class="help">Inline</p><pre>{{ snippets.inline }}</pre><button class="btn btn-sm" data-copy="{{ snippets.inline }}">Copy</button>
+      <p class="help mt">Popup widget</p><pre>{{ snippets.popup_widget }}</pre><button class="btn btn-sm" data-copy="{{ snippets.popup_widget }}">Copy</button>
+      <p class="help mt">Popup text</p><pre>{{ snippets.popup_text }}</pre><button class="btn btn-sm" data-copy="{{ snippets.popup_text }}">Copy</button>
+    </details>
+  </div>
+  {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const add = document.getElementById('add-loc');
+  if (add) add.addEventListener('click', () => {
+    document.getElementById('locs').appendChild(document.getElementById('loc-tpl').content.cloneNode(true));
+  });
+</script>
+{% endblock %}

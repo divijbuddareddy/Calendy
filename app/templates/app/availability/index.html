@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Availability{% endblock %}
+{% block head %}
+<style>
+  .sched-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px; }
+  .sched-tabs a { padding:6px 12px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font-weight:600; font-size:.88rem; background:var(--surface); }
+  .sched-tabs a.active { border-color:var(--primary); color:var(--primary); background:var(--primary-soft); }
+  .day-row { display:grid; grid-template-columns:150px 1fr auto; gap:12px; align-items:start; padding:12px 0; border-bottom:1px solid var(--border); }
+  .day-row:last-child { border-bottom:0; }
+  .ranges { display:flex; flex-direction:column; gap:6px; }
+  .range { display:flex; gap:6px; align-items:center; }
+  .range input[type=time] { max-width:130px; }
+  .day-off { color:var(--muted); padding-top:8px; }
+  .ov-list li { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
+  .holiday-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:4px 16px; }
+  @media (max-width:640px) { .day-row { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Availability</h1><p class="muted" style="margin:0">Set when you're available. Connected calendars and existing bookings are always checked for conflicts.</p></div>
+  <div class="row">
+    {% if user.slug %}<a class="btn" href="/{{ user.slug }}" target="_blank" rel="noopener">Live preview ↗</a>{% endif %}
+    <details style="position:relative"><summary class="btn btn-primary" style="list-style:none">+ New schedule</summary>
+      <form method="post" action="/app/availability/schedules" class="card" style="position:absolute;right:0;z-index:10;width:300px;margin-top:6px">{{ csrf_input(request) }}
+        <div class="field"><label for="new-name">Schedule name</label><input id="new-name" name="name" placeholder="e.g. Evenings" required></div>
+        <div class="field"><label for="copy-from">Start from</label><select id="copy-from" name="copy_from"><option value="">Mon–Fri 9–5</option>{% for s in schedules %}<option value="{{ s.id }}">Copy “{{ s.name }}”</option>{% endfor %}</select></div>
+        <button class="btn btn-primary btn-block">Create</button>
+      </form></details>
+  </div>
+</div>
+
+<nav class="sched-tabs" aria-label="Schedules">
+  {% for s in schedules %}<a href="?schedule={{ s.id }}" class="{{ 'active' if s.id == sel.id }}">{{ s.name }}{% if s.is_default %} · Default{% endif %}</a>{% endfor %}
+</nav>
+
+<div class="grid" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr);align-items:start" id="avail-grid">
+  <div>
+    <form method="post" action="/app/availability/{{ sel.id }}/weekly" class="card" id="weekly-form">{{ csrf_input(request) }}
+      <div class="grid grid-2">
+        <div class="field"><label for="sched-name">Schedule name</label><input id="sched-name" name="name" value="{{ sel.name }}" required></div>
+        <div class="field"><label for="tz">Timezone</label>
+          <select id="tz" name="timezone">{% for z in timezones %}<option value="{{ z }}" {{ 'selected' if z == sel.timezone }}>{{ z|replace('_',' ') }}</option>{% endfor %}</select></div>
+      </div>
+      <h2 style="margin-top:6px">Weekly hours</h2>
+      {% for wd in range(7) %}
+      <div class="day-row" data-day="{{ wd }}">
+        <label class="check" style="margin-top:6px"><input type="checkbox" class="day-toggle" {{ 'checked' if week[wd] }} aria-label="{{ weekdays[wd] }} available"> {{ weekdays[wd] }}</label>
+        <div class="ranges">
+          {% for r in week[wd] %}
+          <div class="range"><input type="time" name="d{{ wd }}_start" value="{{ r.start }}" aria-label="{{ weekdays[wd] }} start" required> <span>–</span> <input type="time" name="d{{ wd }}_end" value="{{ '23:59' if r.end == '24:00' else r.end }}" aria-label="{{ weekdays[wd] }} end" required>
+            <button type="button" class="btn btn-ghost btn-sm rm-range" aria-label="Remove range">✕</button></div>
+          {% endfor %}
+          {% if not week[wd] %}<div class="day-off">Unavailable</div>{% endif %}
+        </div>
+        <div class="row" style="flex-wrap:nowrap">
+          <button type="button" class="btn btn-sm add-range" aria-label="Add range for {{ weekdays[wd] }}">+</button>
+          <button type="button" class="btn btn-sm copy-all" title="Copy these hours to all days" aria-label="Copy {{ weekdays[wd] }} to all days">⧉</button>
+        </div>
+      </div>
+      {% endfor %}
+      <div class="spread mt">
+        <span class="help">Ranges can't overlap. Times are in {{ sel.timezone }}; invitees see them in their own timezone.</span>
+        <button class="btn btn-primary">Save weekly hours</button>
+      </div>
+    </form>
+
+    <div class="card" id="overrides">
+      <div class="card-head"><h2 style="margin:0">Date overrides &amp; days off</h2></div>
+      <p class="muted">Change hours for specific dates, or block them entirely (vacation, personal days).</p>
+      <form method="post" action="/app/availability/{{ sel.id }}/overrides" id="ov-form">{{ csrf_input(request) }}
+        <div class="grid grid-3">
+          <div class="field"><label for="ov-date">Date</label><input type="date" id="ov-date" name="date" min="{{ today.isoformat() }}" required></div>
+          <div class="field"><label for="ov-end">Until <span class="muted">(optional)</span></label><input type="date" id="ov-end" name="end_date" min="{{ today.isoformat() }}"></div>
+          <div class="field"><label for="ov-mode">Availability</label>
+            <select id="ov-mode" name="mode"><option value="unavailable">Unavailable all day</option><option value="custom">Custom hours</option></select></div>
+        </div>
+        <div id="ov-hours" hidden>
+          <div class="ranges" id="ov-ranges"><div class="range"><input type="time" name="start" value="09:00" aria-label="Start"> – <input type="time" name="end" value="12:00" aria-label="End"></div></div>
+          <button type="button" class="btn btn-sm mt" id="ov-add">+ Add range</button>
+        </div>
+        <div class="grid grid-2 mt">
+          <div class="field"><label for="ov-reason">Reason <span class="muted">(private)</span></label><input id="ov-reason" name="reason" placeholder="e.g. Dentist, Vacation"></div>
+          <div class="field"><label for="ov-kind">Type</label><select id="ov-kind" name="kind"><option value="override">Date override</option><option value="day_off">Personal day off</option></select></div>
+        </div>
+        <button class="btn btn-primary">Save override</button>
+      </form>
+      <hr class="divider">
+      {% if overrides %}
+      <ul class="ov-list" style="list-style:none;padding:0;margin:0">
+        {% for o in overrides %}
+        <li><span><strong>{{ o.local_date.strftime('%a %d %b %Y') }}</strong>
+          {% if o.kind == 'holiday' %}<span class="badge badge-primary">Holiday</span>{% elif o.kind == 'day_off' %}<span class="badge badge-warning">Day off</span>{% endif %}
+          <span class="muted">— {% if o.intervals_json %}{% for i in o.intervals_json %}{{ i.start }}–{{ i.end }}{{ ', ' if not loop.last }}{% endfor %}{% else %}Unavailable{% endif %}{% if o.reason %} · {{ o.reason }}{% endif %}</span></span>
+          <form method="post" action="/app/availability/{{ sel.id }}/overrides/{{ o.id }}/delete" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-ghost" aria-label="Remove override">Remove</button></form></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted" style="margin:0">No upcoming overrides.</p>{% endif %}
+      {% if past_overrides %}<p class="help">{{ past_overrides }} past override(s) hidden.</p>{% endif %}
+    </div>
+
+    <div class="card" id="holidays">
+      <h2>Holidays</h2>
+      <form method="get" action="/app/availability" class="row" style="margin-bottom:12px">
+        <input type="hidden" name="schedule" value="{{ sel.id }}">
+        <label for="country" class="sr-only">Country</label>
+        <select id="country" name="country" style="max-width:320px" onchange="this.form.submit()"><option value="">Choose a country…</option>{% for c, label in countries.items() %}<option value="{{ c }}" {{ 'selected' if c == country }}>{{ label }}</option>{% endfor %}</select>
+        <noscript><button class="btn btn-sm">Show</button></noscript>
+      </form>
+      {% if country %}
+      <form method="post" action="/app/availability/{{ sel.id }}/holidays">{{ csrf_input(request) }}
+        <input type="hidden" name="country" value="{{ country }}">
+        <p class="help">Checked dates are blocked as unavailable on this schedule.</p>
+        <div class="holiday-grid">
+          {% for d, name, on in holidays %}
+          <label class="check"><input type="checkbox" name="dates" value="{{ d.isoformat() }}" {{ 'checked' if on }}> <span>{{ d.strftime('%d %b %Y') }} <span class="muted">· {{ name }}</span></span></label>
+          {% endfor %}
+        </div>
+        <div class="row mt"><button type="button" class="btn btn-sm" onclick="this.form.querySelectorAll('input[name=dates]').forEach(c=>c.checked=true)">Select all</button>
+          <button class="btn btn-primary">Save holidays</button></div>
+      </form>
+      {% else %}<p class="muted" style="margin:0">Pick a country to block its public holidays.</p>{% endif %}
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h3>Schedule</h3>
+      <p class="muted" style="margin-top:0">{% if sel.is_default %}This is your default schedule — used by event types without a specific schedule.{% else %}Not the default schedule.{% endif %}</p>
+      {% if used_by %}<p style="margin-bottom:6px"><strong>Used by:</strong></p><ul style="margin-top:0;padding-left:18px">{% for e in used_by %}<li>{{ e.name }}</li>{% endfor %}</ul>{% endif %}
+      <div class="row">
+        {% if not sel.is_default %}
+        <form method="post" action="/app/availability/{{ sel.id }}/default" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm">Set as default</button></form>
+        <form method="post" action="/app/availability/{{ sel.id }}/delete" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" data-confirm="Delete this schedule? Event types using it will fall back to your default schedule.">Delete</button></form>
+        {% endif %}
+      </div>
+    </div>
+    <form method="post" action="/app/availability/limits" class="card" id="limits">{{ csrf_input(request) }}
+      <input type="hidden" name="schedule" value="{{ sel.id }}">
+      <h3>Meeting limits</h3>
+      <p class="help" style="margin-top:0">Maximum meetings across <em>all</em> your event types.</p>
+      <div class="field"><label for="dl">Per day</label><input type="number" min="1" id="dl" name="daily_limit" value="{{ limits.daily_limit or '' }}" placeholder="No limit"></div>
+      <div class="field"><label for="wl">Per week</label><input type="number" min="1" id="wl" name="weekly_limit" value="{{ limits.weekly_limit or '' }}" placeholder="No limit"></div>
+      <div class="field"><label for="ml">Per month</label><input type="number" min="1" id="ml" name="monthly_limit" value="{{ limits.monthly_limit or '' }}" placeholder="No limit"></div>
+      <button class="btn btn-primary btn-block">Save limits</button>
+    </form>
+    <div class="card">
+      <h3>Preview</h3>
+      <p class="muted" style="margin-top:0">See exactly what invitees see.</p>
+      {% if user.slug %}<a class="btn btn-block" href="/{{ user.slug }}" target="_blank" rel="noopener">Open booking page ↗</a>{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const names = {{ weekdays|tojson }};
+  function rangeEl(wd, s, e) {
+    const d = document.createElement('div'); d.className = 'range';
+    d.innerHTML = `<input type="time" name="d${wd}_start" value="${s}" aria-label="${names[wd]} start" required> <span>–</span> <input type="time" name="d${wd}_end" value="${e}" aria-label="${names[wd]} end" required> <button type="button" class="btn btn-ghost btn-sm rm-range" aria-label="Remove range">✕</button>`;
+    return d;
+  }
+  function refresh(row) {
+    const ranges = row.querySelector('.ranges'), has = ranges.querySelectorAll('.range').length > 0;
+    row.querySelector('.day-toggle').checked = has;
+    let off = ranges.querySelector('.day-off');
+    if (!has && !off) { off = document.createElement('div'); off.className = 'day-off'; off.textContent = 'Unavailable'; ranges.appendChild(off); }
+    if (has && off) off.remove();
+  }
+  document.querySelectorAll('.day-row').forEach(row => {
+    const wd = row.dataset.day, ranges = row.querySelector('.ranges');
+    row.querySelector('.add-range').onclick = () => {
+      const last = [...ranges.querySelectorAll('input[name$="_end"]')].pop();
+      let s = '09:00', e = '17:00';
+      if (last && last.value) { const h = Math.min(parseInt(last.value) + 1, 22); s = String(h).padStart(2, '0') + ':00'; e = String(h + 1).padStart(2, '0') + ':00'; }
+      ranges.appendChild(rangeEl(wd, s, e)); refresh(row);
+    };
+    row.querySelector('.day-toggle').onchange = (ev) => {
+      if (ev.target.checked) { ranges.appendChild(rangeEl(wd, '09:00', '17:00')); }
+      else ranges.querySelectorAll('.range').forEach(r => r.remove());
+      refresh(row);
+    };
+    row.querySelector('.copy-all').onclick = () => {
+      const src = [...ranges.querySelectorAll('.range')].map(r => [r.children[0].value, r.children[2].value]);
+      document.querySelectorAll('.day-row').forEach(other => {
+        if (other === row) return;
+        const od = other.dataset.day, or_ = other.querySelector('.ranges');
+        or_.querySelectorAll('.range').forEach(r => r.remove());
+        src.forEach(([s, e]) => or_.appendChild(rangeEl(od, s, e)));
+        refresh(other);
+      });
+      toast('Copied to all days — remember to save');
+    };
+    ranges.addEventListener('click', (ev) => { const b = ev.target.closest('.rm-range'); if (b) { b.parentElement.remove(); refresh(row); } });
+  });
+  // client-side overlap check (server validates too)
+  document.getElementById('weekly-form').addEventListener('submit', (ev) => {
+    for (const row of document.querySelectorAll('.day-row')) {
+      const rs = [...row.querySelectorAll('.range')].map(r => [r.children[0].value, r.children[2].value]).sort();
+      for (let i = 0; i < rs.length; i++) {
+        if (rs[i][0] >= rs[i][1]) { ev.preventDefault(); alert(names[row.dataset.day] + ': start must be before end'); return; }
+        if (i && rs[i][0] < rs[i - 1][1]) { ev.preventDefault(); alert(names[row.dataset.day] + ': time ranges overlap'); return; }
+      }
+    }
+  });
+  const mode = document.getElementById('ov-mode'), hours = document.getElementById('ov-hours');
+  mode.onchange = () => { hours.hidden = mode.value !== 'custom'; };
+  document.getElementById('ov-add').onclick = () => {
+    const d = document.createElement('div'); d.className = 'range';
+    d.innerHTML = '<input type="time" name="start" value="13:00" aria-label="Start"> – <input type="time" name="end" value="17:00" aria-label="End"> <button type="button" class="btn btn-ghost btn-sm" aria-label="Remove">✕</button>';
+    d.querySelector('button').onclick = () => d.remove();
+    document.getElementById('ov-ranges').appendChild(d);
+  };
+})();
+</script>
+<style>@media (max-width: 960px) { #avail-grid { grid-template-columns: 1fr !important; } }</style>
+{% endblock %}

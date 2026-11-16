@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+{% macro bars(items, empty_text="No data in this range.") %}
+  {% set total = items | sum(attribute='count') %}
+  {% if total == 0 %}<p class="empty">{{ empty_text }}</p>{% else %}
+  <ul class="stack" style="list-style:none;padding:0;margin:0">
+    {% for it in items %}
+    <li>
+      <div class="spread"><span>{{ it.label }}</span><strong>{{ it.count }}</strong></div>
+      <div class="bar-track" role="img" aria-label="{{ it.label }}: {{ it.count }}"><div class="bar" style="width: {{ it.pct }}%"></div></div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+{% endmacro %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Analytics</h1>
+    <p class="muted">{% if f and not f.extra.is_admin %}Your bookings only.{% else %}Booking performance across the workspace.{% endif %}
+      Times shown in {{ user.default_timezone }}.</p>
+  </div>
+  {% if not locked %}<a class="btn" href="/app/analytics/export.csv?{{ query }}">Export CSV</a>{% endif %}
+</div>
+
+{% if locked %}
+<div class="card empty">
+  <h2>Analytics is available on Standard and above</h2>
+  <p>Upgrade to see created, completed, cancelled and rescheduled meetings, attribution and exports.</p>
+  <a class="btn btn-primary" href="/app/settings">View plans</a>
+</div>
+{% else %}
+<form class="card" method="get" action="/app/analytics" aria-label="Analytics filters">
+  <div class="inline-fields">
+    <div class="field"><label for="f-start">From</label><input id="f-start" type="date" name="start" value="{{ f.extra.start_date }}"></div>
+    <div class="field"><label for="f-end">To</label><input id="f-end" type="date" name="end" value="{{ f.extra.end_date }}"></div>
+    <div class="field"><label for="f-et">Event type</label>
+      <select id="f-et" name="event_type"><option value="">All event types</option>
+        {% for e in event_types %}<option value="{{ e.id }}" {{ 'selected' if f.event_type_id == e.id }}>{{ e.name }}</option>{% endfor %}
+      </select></div>
+    {% if f.extra.is_admin %}
+    <div class="field"><label for="f-host">Host</label>
+      <select id="f-host" name="host"><option value="">All hosts</option>
+        {% for m in members %}<option value="{{ m.id }}" {{ 'selected' if f.host_id == m.id }}>{{ m.name or m.email }}</option>{% endfor %}
+      </select></div>
+    {% endif %}
+    {% if f.extra.team_ok %}
+    <div class="field"><label for="f-team">Team</label>
+      <select id="f-team" name="team"><option value="">All teams</option>
+        {% for t in teams %}<option value="{{ t.id }}" {{ 'selected' if f.team_id == t.id }}>{{ t.name }}</option>{% endfor %}
+      </select></div>
+    {% endif %}
+  </div>
+  <div class="row"><button class="btn btn-primary" type="submit">Apply</button>
+    <a class="btn btn-ghost" href="/app/analytics">Last 30 days</a>
+    {% if f.extra.is_admin and not f.extra.team_ok %}<span class="help">Team filters require the Teams plan.</span>{% endif %}
+  </div>
+</form>
+
+<div class="grid grid-3 mt" id="kpis">
+  {% for key, label in [('created','Created'),('completed','Completed'),('upcoming','Upcoming'),('cancelled','Cancelled'),('rescheduled','Rescheduled'),('no_show','No-shows')] %}
+  {% set delta = d.kpi[key] - prev[key] %}
+  <div class="card stat"><div class="num" data-kpi="{{ key }}">{{ d.kpi[key] }}</div><div class="lbl">{{ label }}</div>
+    <div class="help" data-prev="{{ key }}">{{ '+' if delta > 0 }}{{ delta }} vs previous period ({{ prev[key] }})</div></div>
+  {% endfor %}
+</div>
+
+<div class="grid grid-3 mt">
+  <div class="card stat"><div class="num">{{ d.page_views }}</div><div class="lbl">Booking page views</div></div>
+  <div class="card stat"><div class="num">{{ (d.conversion ~ '%') if d.conversion is not none else '—' }}</div><div class="lbl">View → booking conversion</div></div>
+  <div class="card stat"><div class="num">{{ (d.avg_lead_hours ~ ' h') if d.avg_lead_hours is not none else '—' }}</div><div class="lbl">Average booking lead time</div>
+    {% if d.lead_time.median_hours is not none %}<div class="help">Median {{ d.lead_time.median_hours }} h</div>{% endif %}</div>
+</div>
+
+<div class="grid grid-3 mt">
+  <div class="card stat"><div class="num">{{ d.popular_event or '—' }}</div><div class="lbl">Most popular event type</div></div>
+  <div class="card stat"><div class="num">{{ (d.popular_duration ~ ' min') if d.popular_duration else '—' }}</div><div class="lbl">Most popular duration</div></div>
+  <div class="card stat"><div class="num">{% if d.heatmap.top %}{{ d.heatmap.top[0].day }} {{ d.heatmap.top[0].hour }}{% else %}—{% endif %}</div><div class="lbl">Most popular time slot</div></div>
+</div>
+
+<section class="card mt" aria-labelledby="heat-h">
+  <h2 id="heat-h">Popular time slots</h2>
+  <p class="muted">Meetings by weekday and start hour ({{ user.default_timezone }}). Darker = more bookings.</p>
+  {% if d.heatmap.max %}
+  <div class="table-wrap"><table class="table heatmap" style="font-size:12px;text-align:center">
+    <thead><tr><th scope="col"></th>{% for h in range(24) %}<th scope="col" style="padding:2px">{{ '%02d' % h }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for row in d.heatmap.rows %}<tr><th scope="row">{{ row.day }}</th>
+      {% for c in row.cells %}<td data-heat="{{ row.day }}-{{ c.hour }}" title="{{ row.day }} {{ '%02d' % c.hour }}:00 — {{ c.count }}" aria-label="{{ row.day }} {{ '%02d' % c.hour }}:00: {{ c.count }}"
+        style="padding:2px;{% if c.level %}background: color-mix(in srgb, var(--primary, #4f46e5) {{ c.level * 22 }}%, transparent);{% endif %}">{{ c.count or '' }}</td>{% endfor %}
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="empty">No bookings in this range.</p>{% endif %}
+</section>
+
+<section class="card mt"><h2>Booking lead time</h2>
+  <p class="muted">Time between booking and meeting start.</p>
+  {{ bars(d.lead_time.buckets) }}
+</section>
+
+<div class="grid grid-2 mt">
+  <section class="card"><h2>Bookings by event type</h2>{{ bars(d.by_event) }}</section>
+  <section class="card"><h2>Popular durations</h2>{{ bars(d.durations) }}</section>
+  <section class="card"><h2>By weekday</h2>{{ bars(d.by_weekday) }}</section>
+  <section class="card"><h2>By hour of day</h2>{{ bars(d.by_hour | selectattr('count') | list, "No bookings yet.") }}</section>
+</div>
+
+<section class="card mt">
+  <h2>UTM attribution</h2>
+  {% if d.utm %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Source</th><th>Medium</th><th>Campaign</th><th>Bookings</th></tr></thead>
+    <tbody>{% for u in d.utm %}<tr><td>{{ u.source }}</td><td>{{ u.medium }}</td><td>{{ u.campaign }}</td><td>{{ u.count }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="empty">No UTM-tagged bookings. Add <code>?utm_source=…</code> to your booking links.</p>{% endif %}
+</section>
+
+<section class="card mt">
+  <h2>Routing forms</h2>
+  <p class="muted">{{ d.routing_total }} submission{{ '' if d.routing_total == 1 else 's' }} in range.</p>
+  {% for r in d.routing %}
+  <div class="card">
+    <div class="card-head"><h3>{{ r.form }}</h3><span class="badge badge-primary">{{ r.converted }}/{{ r.submissions }} booked · {{ r.conversion }}%</span></div>
+    {{ bars(r.distribution) }}
+  </div>
+  {% else %}<p class="empty">No routing form submissions.</p>{% endfor %}
+</section>
+
+<section class="card mt">
+  <h2>Round-robin distribution</h2>
+  {% for r in d.rr %}
+  <div class="card">
+    <div class="card-head"><h3>{{ r.event }}</h3><span class="badge {{ 'badge-success' if r.spread <= 1 else 'badge-warning' }}">Spread {{ r.spread }}</span></div>
+    {{ bars(r.hosts) }}
+  </div>
+  {% else %}<p class="empty">No round-robin bookings in range.</p>{% endfor %}
+</section>
+
+<section class="card mt">
+  <h2>Payment revenue by event type</h2>
+  {% if d.revenue %}
+  <table class="table"><thead><tr><th>Event type</th><th>Revenue</th></tr></thead>
+    <tbody>{% for r in d.revenue %}<tr><td>{{ r.event }}</td><td>{{ r.amount_minor | money(r.currency) }}</td></tr>{% endfor %}</tbody></table>
+  {% else %}<p class="empty">No successful payments in range.</p>{% endif %}
+</section>
+
+<p class="help mt">Definitions: “Created” counts bookings made in the selected range (excluding expired holds). Completed = confirmed meetings that have ended and were not marked no-show. Invitee personal data is anonymised {{ retention }} days after the meeting (workspace retention, set by admins in Admin &gt; Security); counts are kept. <a href="/app/analytics/data.json?{{ query }}">JSON</a></p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "public_base.html" if public else "base.html" %}
+{% block title %}Invoice {{ invoice.number }}{% endblock %}
+{% block content %}
+<div class="{{ 'public-wrap' if public }}" style="max-width:720px">
+  {% if not public %}<p><a href="/app/payments?tab=invoices">← Invoices</a></p>{% endif %}
+  <div class="card" style="padding:28px">
+    <div class="spread">
+      <div><h1 style="margin:0">Invoice {{ invoice.number }}</h1>
+        <p class="muted" style="margin:4px 0 0">From {{ host.name if host else app_name }}{% if host %} &lt;{{ host.email }}&gt;{% endif %}</p></div>
+      <span class="badge {{ 'badge-success' if invoice.status == 'paid' else 'badge-danger' if invoice.status == 'void' else 'badge-primary' }}">{{ invoice.status|capitalize }}</span>
+    </div>
+    <p class="mt">Billed to: <strong>{{ invoice.recipient_name or invoice.recipient_email }}</strong>{% if invoice.recipient_name %} &lt;{{ invoice.recipient_email }}&gt;{% endif %}</p>
+    {% if invoice.due_date %}<p class="muted">Due {{ invoice.due_date.strftime('%d %b %Y') }}</p>{% endif %}
+    {% if invoice.description %}<p>{{ invoice.description }}</p>{% endif %}
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th style="text-align:right">Total</th></tr></thead>
+      <tbody>
+      {% for l in invoice.line_items_json %}
+        <tr><td>{{ l.description }}</td><td>{{ l.quantity }}</td><td>{{ l.unit_minor|money(invoice.currency) }}</td><td style="text-align:right">{{ (l.unit_minor * l.quantity)|money(invoice.currency) }}</td></tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr><th colspan="3">Total due</th><th style="text-align:right">{{ invoice.amount_minor|money(invoice.currency) }} {{ invoice.currency }}</th></tr></tfoot>
+    </table></div>
+    {% if public and invoice.status == 'sent' %}
+    <form method="post" action="/p/invoice/{{ invoice.public_token }}" class="mt">{{ csrf_input(request) }}
+      <button class="btn btn-primary btn-block" type="submit">Pay {{ invoice.amount_minor|money(invoice.currency) }} securely</button>
+    </form>
+    <p class="help mt">Payment is processed by the host's payment provider. We never see or store your card details.</p>
+    {% elif invoice.status == 'paid' %}
+    <div class="alert alert-success mt">Paid{% if invoice.paid_at %} on {{ invoice.paid_at.strftime('%d %b %Y') }}{% endif %}. Thank you!</div>
+    {% elif invoice.status == 'void' %}
+    <div class="alert alert-warning mt">This invoice has been voided and can't be paid.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

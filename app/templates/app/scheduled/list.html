@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Scheduled events{% endblock %}
+{% block head %}
+<style>
+  .bk-row { display:grid; grid-template-columns:150px 1fr auto; gap:14px; align-items:center; padding:14px 16px; border-bottom:1px solid var(--border); color:var(--text); }
+  .bk-row:hover { background:var(--surface-2); text-decoration:none; }
+  .bk-row:last-child { border-bottom:0; }
+  .day-head { font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; padding:14px 16px 6px; background:var(--surface-2); border-bottom:1px solid var(--border); }
+  .filters { display:grid; grid-template-columns:2fr 1.5fr 1fr 1fr auto; gap:10px; align-items:end; }
+  .filters .field { margin:0; }
+  @media (max-width:860px) { .filters { grid-template-columns:1fr 1fr; } .bk-row { grid-template-columns:1fr; gap:4px; } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Scheduled events</h1><p class="muted" style="margin:0">Times shown in {{ tz }}.{% if not ctx.can('admin') %} You see meetings you host.{% else %} You see all meetings in this workspace.{% endif %}</p></div>
+  <a class="btn" href="/app/scheduled/export.csv?{{ qs }}">Export CSV</a>
+</div>
+<div class="tabs" role="tablist">
+  {% for k, label in tabs.items() %}
+  <a href="?tab={{ k }}{% if filters.q %}&q={{ filters.q|urlencode }}{% endif %}{% if filters.event_type %}&event_type={{ filters.event_type }}{% endif %}" class="{{ 'active' if tab == k }}" role="tab" aria-selected="{{ 'true' if tab == k else 'false' }}">{{ label }}{% if k == 'pending' and pending_count %} <span class="badge badge-warning">{{ pending_count }}</span>{% endif %}</a>
+  {% endfor %}
+</div>
+<form method="get" class="card filters" style="margin-bottom:16px;padding:14px">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <div class="field"><label for="q">Invitee</label><input type="search" id="q" name="q" value="{{ filters.q }}" placeholder="Name or email"></div>
+  <div class="field"><label for="et">Event type</label><select id="et" name="event_type"><option value="">All event types</option>{% for e in all_ets %}<option value="{{ e.id }}" {{ 'selected' if filters.event_type == e.id }}>{{ e.name }}</option>{% endfor %}</select></div>
+  <div class="field"><label for="df">From</label><input type="date" id="df" name="date_from" value="{{ filters.date_from }}"></div>
+  <div class="field"><label for="dt">To</label><input type="date" id="dt" name="date_to" value="{{ filters.date_to }}"></div>
+  <div class="row"><button class="btn btn-primary">Filter</button>{% if filters.q or filters.event_type or filters.date_from or filters.date_to %}<a class="btn btn-ghost" href="?tab={{ tab }}">Clear</a>{% endif %}</div>
+</form>
+<div class="card" style="padding:0;overflow:hidden">
+  {% if not rows %}
+    <div class="empty">
+      {% if tab == 'upcoming' %}<h3>No upcoming meetings</h3><p>Share your booking link to start getting meetings.</p><a class="btn btn-primary" href="/app/event-types">View event types</a>
+      {% elif tab == 'pending' %}<p>Nothing waiting on you. Payment-pending bookings and cancellation requests appear here.</p>
+      {% else %}<p>No {{ tabs[tab]|lower }} meetings{% if filters.q or filters.event_type or filters.date_from %} match these filters{% endif %}.</p>{% endif %}
+    </div>
+  {% else %}
+    {% for day, items in groups.items() %}
+      <div class="day-head">{{ day }}</div>
+      {% for b in items %}{% set e = ets.get(b.event_type_id) %}{% set inv = b.invitees[0] if b.invitees else None %}
+      <a class="bk-row" href="/app/scheduled/{{ b.id }}">
+        <div class="row" style="flex-wrap:nowrap"><span class="color-dot" style="background:{{ e.color if e else '#999' }}"></span>
+          <span><strong>{{ b.start_at|dt(tz, '%H:%M') }}</strong> – {{ b.end_at|dt(tz, '%H:%M') }}</span></div>
+        <div>
+          <strong>{{ inv.name if inv else 'Invitee' }}</strong>{% if b.invitees|length > 1 %} <span class="muted">+{{ b.invitees|length - 1 }}</span>{% endif %}
+          <div class="muted" style="font-size:.85rem">{{ e.name if e else 'Event' }}{% if ctx.can('admin') and hosts.get(b.host_id) %} · Host: {{ hosts[b.host_id].name }}{% endif %}</div>
+        </div>
+        <div class="row">
+          {% if b.conflict_flag %}<span class="badge badge-danger" title="{{ b.conflict_detail or '' }}">⚠ Conflict</span>{% endif %}
+          {% if b.no_show %}<span class="badge badge-warning">No-show</span>{% endif %}
+          {% if b.cancellation_requested_at and b.status == 'confirmed' %}<span class="badge badge-warning">Cancellation requested</span>{% endif %}
+          {% if b.status == 'pending_payment' %}<span class="badge badge-warning">Awaiting payment</span>
+          {% elif b.status == 'pending' %}<span class="badge badge-warning">Pending</span>
+          {% elif b.status == 'cancelled' %}<span class="badge badge-danger">Cancelled{% if b.cancelled_by %} by {{ b.cancelled_by }}{% endif %}</span>
+          {% elif b.status == 'rescheduled' %}<span class="badge">Rescheduled</span>
+          {% elif b.status == 'confirmed' and tab == 'upcoming' %}<span class="badge badge-success">Confirmed</span>{% endif %}
+          <span class="muted" aria-hidden="true">›</span>
+        </div>
+      </a>
+      {% endfor %}
+    {% endfor %}
+  {% endif %}
+</div>
+{% if rows|length >= 200 %}<p class="help">Showing the first 200 results. Narrow the filters or export CSV for everything.</p>{% endif %}
+{% endblock %}

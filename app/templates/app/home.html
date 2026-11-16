@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block head %}
+<style>
+  .up-item { display:flex; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); color:var(--text); }
+  .up-item:last-child { border-bottom:0; }
+  .up-item:hover { text-decoration:none; background:var(--surface-2); }
+  .up-when { min-width:120px; font-weight:700; }
+  .notif { display:flex; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .notif:last-child { border-bottom:0; }
+  .notif.unread strong::before { content:"● "; color:var(--primary); }
+  .et-short { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); }
+  .et-short:last-child { border-bottom:0; }
+</style>
+{% endblock %}
+{% block content %}
+{% if not host_public %}
+<div class="alert alert-warning spread" role="alert">
+  <span><strong>Verify your email to activate your booking links.</strong> We sent a link to {{ user.email }}.</span>
+  <form method="post" action="/verify-email/resend" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm">Resend verification email</button></form>
+</div>
+{% endif %}
+{% for c in broken %}
+<div class="alert alert-error spread" role="alert">
+  <span><strong>{{ c.provider|capitalize }} calendar {{ 'disconnected' if c.status == 'revoked' else 'needs attention' }}</strong>{% if c.account_email %} ({{ c.account_email }}){% endif %}.
+    Availability can't be verified against this calendar, so affected times are hidden until you reconnect.{% if c.last_error %} <span class="muted">Error: {{ c.last_error|truncate(140) }}</span>{% endif %}</span>
+  <a class="btn btn-sm btn-primary" href="/app/integrations">Reconnect</a>
+</div>
+{% endfor %}
+
+<div class="page-head">
+  <div><h1>Welcome{{ ', ' ~ user.name.split(' ')[0] if user.name }}</h1>
+    <p class="muted" style="margin:0">Here's what's happening with your schedule.</p></div>
+  <div class="row">
+    {% if user.slug %}<button class="btn" data-copy="{{ base_url }}/{{ user.slug }}">Copy my booking page link</button>{% endif %}
+    <a class="btn btn-primary" href="/app/event-types/new">+ New event type</a>
+  </div>
+</div>
+
+<div class="grid grid-4" style="margin-bottom:16px">
+  <div class="card stat"><div class="num">{{ stats.created }}</div><div class="lbl">Bookings created (30 days)</div></div>
+  <div class="card stat"><div class="num">{{ stats.upcoming }}</div><div class="lbl">Upcoming meetings</div></div>
+  <div class="card stat"><div class="num">{{ stats.cancelled }}</div><div class="lbl">Cancelled (30 days)</div></div>
+  <div class="card stat"><div class="num">{{ stats.rescheduled }}</div><div class="lbl">Rescheduled (30 days)</div></div>
+</div>
+
+<div class="grid" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr);align-items:start" id="home-grid">
+  <div>
+    {% if conflicts %}
+    <div class="card" style="border-color:var(--danger)">
+      <h2 style="color:var(--danger)">⚠ Calendar conflicts</h2>
+      <p class="muted">These meetings now overlap other events on your calendar.</p>
+      {% for b in conflicts %}{% set inv = b.invitees[0] if b.invitees else None %}
+      <a class="up-item" href="/app/scheduled/{{ b.id }}"><span class="up-when">{{ b.start_at|dt(tz, '%a %d %b %H:%M') }}</span>
+        <span>{{ ets[b.event_type_id].name if ets.get(b.event_type_id) }}{% if inv %} · {{ inv.name }}{% endif %}<div class="muted" style="font-size:.82rem">{{ b.conflict_detail or '' }}</div></span></a>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if pending_approvals or pending_other %}
+    <div class="card">
+      <div class="card-head"><h2 style="margin:0">Needs your attention</h2><a href="/app/scheduled?tab=pending">View all</a></div>
+      {% for b in pending_approvals %}{% set inv = b.invitees[0] if b.invitees else None %}
+      <div class="spread" style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <span><strong>Cancellation request</strong> — {{ ets[b.event_type_id].name if ets.get(b.event_type_id) }}{% if inv %} with {{ inv.name }}{% endif %}, {{ b.start_at|dt(tz, '%a %d %b %H:%M') }}</span>
+        <span class="row">
+          <form method="post" action="/app/scheduled/{{ b.id }}/approve-cancel" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-primary">Approve</button></form>
+          <form method="post" action="/app/scheduled/{{ b.id }}/decline-cancel" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm">Decline</button></form>
+        </span>
+      </div>
+      {% endfor %}
+      {% if pending_other %}<p class="muted" style="margin:8px 0 0">{{ pending_other }} booking(s) pending confirmation or payment.</p>{% endif %}
+    </div>
+    {% endif %}
+    <div class="card">
+      <div class="card-head"><h2 style="margin:0">Upcoming — next 7 days</h2><a href="/app/scheduled">All scheduled events</a></div>
+      {% if upcoming %}
+        {% for b in upcoming %}{% set e = ets.get(b.event_type_id) %}{% set inv = b.invitees[0] if b.invitees else None %}
+        <a class="up-item" href="/app/scheduled/{{ b.id }}">
+          <span class="color-dot" style="background:{{ e.color if e else '#999' }}"></span>
+          <span class="up-when">{{ b.start_at|dt(tz, '%a %d %b, %H:%M') }}</span>
+          <span style="flex:1">{{ inv.name if inv else 'Invitee' }} <span class="muted">· {{ e.name if e else '' }}{% if b.host_id != user.id and hosts.get(b.host_id) %} · {{ hosts[b.host_id].name }}{% endif %}</span></span>
+          {% if b.start_at <= now %}<span class="badge badge-success">Now</span>{% endif %}
+          {% if b.conflict_flag %}<span class="badge badge-danger">Conflict</span>{% endif %}
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="empty"><p>No meetings in the next 7 days.</p>{% if events %}<button class="btn btn-sm" data-copy="{{ urls[events[0].id] }}">Copy “{{ events[0].name }}” link</button>{% endif %}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="card-head"><h3 style="margin:0">Your event types</h3><a href="/app/event-types">Manage</a></div>
+      {% for e in events %}
+      <div class="et-short"><span class="row" style="flex-wrap:nowrap;min-width:0"><span class="color-dot" style="background:{{ e.color }}"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ e.name }}</span> <span class="muted">{{ e.duration }}m</span></span>
+        <span class="row" style="flex-wrap:nowrap"><button class="btn btn-sm" data-copy="{{ urls[e.id] }}">Copy link</button></span></div>
+      {% else %}<p class="muted">No active event types. <a href="/app/event-types/new">Create one →</a></p>{% endfor %}
+    </div>
+    <div class="card">
+      <div class="card-head"><h3 style="margin:0">Calendars</h3><a href="/app/integrations">Manage</a></div>
+      {% for c in connections %}
+        <div class="spread" style="padding:6px 0"><span>{{ c.provider|capitalize }}{% if c.account_email %} <span class="muted">· {{ c.account_email }}</span>{% endif %}</span>
+          {% if c.status == 'connected' %}<span class="badge badge-success">Connected</span>{% else %}<span class="badge badge-danger">{{ c.status|capitalize }}</span>{% endif %}</div>
+        {% if c.last_synced_at %}<div class="help">Last synced {{ c.last_synced_at|dt(tz, '%d %b %H:%M') }}</div>{% endif %}
+      {% else %}
+        <p class="muted" style="margin-top:0">No calendar connected — we can't check your existing events for conflicts yet.</p>
+        <a class="btn btn-sm btn-primary" href="/app/integrations">Connect a calendar</a>
+      {% endfor %}
+    </div>
+    <div class="card">
+      <div class="card-head"><h3 style="margin:0">Notifications {% if unread %}<span class="badge badge-primary">{{ unread }}</span>{% endif %}</h3>
+        {% if unread %}<form method="post" action="/app/notifications/read-all" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-ghost">Mark all read</button></form>{% endif %}</div>
+      {% for n in notifications %}
+      <div class="notif {{ 'unread' if not n.read_at }}">
+        <div><strong>{{ n.title }}</strong>{% if n.body %}<div class="muted" style="font-size:.85rem">{{ n.body|truncate(120) }}</div>{% endif %}<div class="help">{{ n.created_at|dt(tz, '%d %b %H:%M') }}</div></div>
+        {% if not n.read_at or n.link %}<form method="post" action="/app/notifications/{{ n.id }}/read" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-ghost">{{ 'Open' if n.link else 'Mark read' }}</button></form>{% endif %}
+      </div>
+      {% else %}<p class="muted" style="margin:0">You're all caught up.</p>{% endfor %}
+    </div>
+  </div>
+</div>
+<style>@media (max-width:960px){ #home-grid { grid-template-columns:1fr !important; } }</style>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "public_base.html" %}
+{% block title %}Test checkout{% endblock %}
+{% block content %}
+<div class="public-wrap" style="max-width:520px">
+  <div class="card">
+    <div class="spread">
+      <strong>Stripe test checkout</strong>
+      <span class="badge badge-warning">Test mode</span>
+    </div>
+    <p class="muted mt">Simulated hosted checkout used when no live payment provider is connected. No card details are collected and no money moves.</p>
+    <div class="card mt" style="box-shadow:none;background:var(--surface-2)">
+      <div class="spread"><span>{{ title }}</span><strong>{{ co.amount_minor|money(co.currency) }}</strong></div>
+      <div class="muted" style="font-size:.85rem">Payment ref: <code>{{ co.provider_payment_id }}</code></div>
+    </div>
+    <form method="post" class="mt stack">
+      {{ csrf_input(request) }}
+      <button class="btn btn-primary btn-block" name="outcome" value="success" type="submit">Pay {{ co.amount_minor|money(co.currency) }}</button>
+      <div class="row" style="justify-content:space-between">
+        <button class="btn btn-danger btn-sm" name="outcome" value="fail" type="submit">Simulate card decline</button>
+        <button class="btn btn-ghost btn-sm" name="outcome" value="cancel" type="submit">Cancel checkout</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

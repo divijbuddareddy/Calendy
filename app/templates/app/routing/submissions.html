@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Submissions · {{ rf.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="muted" style="margin:0"><a href="/app/routing/{{ rf.id }}">← {{ rf.name }}</a></p>
+    <h1>Submissions</h1>
+    <p class="muted">{{ rows|length }} submission{{ 's' if rows|length != 1 }} · {{ converted }} converted to a booking{% if rows %} ({{ (100 * converted / rows|length)|round|int }}%){% endif %}</p>
+  </div>
+  <a class="btn" href="/app/routing/{{ rf.id }}/submissions.csv">Export CSV</a>
+</div>
+<section class="card">
+  {% if rows %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Submitted</th><th>Answers</th><th>Matched rule</th><th>Destination</th><th>Booked?</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td style="white-space:nowrap">{{ r.s.created_at|dt(user.default_timezone) }}</td>
+        <td>{% for label, v in r.answers %}<div><span class="muted">{{ label }}:</span> {{ v }}</div>{% endfor %}</td>
+        <td>{% if r.s.matched_rule_id %}<span class="badge badge-primary">{{ r.rule }}</span>{% else %}<span class="badge">Fallback</span>{% endif %}</td>
+        <td>{{ r.dest }}</td>
+        <td>{% if r.s.booking_id %}<span class="badge badge-success">Booked</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<div class="empty">No submissions yet. Share the form link to start routing visitors.</div>{% endif %}
+</section>
+{% endblock %}

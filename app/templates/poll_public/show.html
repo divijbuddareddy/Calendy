@@ -1,0 +1,53 @@
+{% extends "public_base.html" %}
+{% block title %}{{ poll.title }}{% endblock %}
+{% block content %}
+<div class="public-wrap" style="max-width:760px">
+  <div class="card">
+    <p class="muted">{{ owner.name or owner.email }} is finding a time</p>
+    <h1>{{ poll.title }}</h1>
+    <div class="meta-line">⏱ {{ poll.duration }} min</div>
+    {% if poll.location_json %}<div class="meta-line">📍 {{ location_types.get(poll.location_json.type, '') }}{% if poll.location_json.value and poll.status == 'booked' %}: {{ poll.location_json.value }}{% endif %}</div>{% endif %}
+    {% if poll.description %}<p>{{ poll.description }}</p>{% endif %}
+
+    {% if poll.status == 'booked' %}
+      <div class="alert alert-success" role="status">This meeting has been scheduled. Check your email for the final time.</div>
+      {% for t in tallies if t.option.id == poll.chosen_option_id %}<p><strong data-utc="{{ t.option.start_at }}">{{ t.start|dt(host_tz) }}</strong></p>{% endfor %}
+    {% else %}
+      {% if voted or request.query_params.get('voted') %}<div class="alert alert-success" role="status">Thanks! Your availability was saved. You can update it any time with the same email.</div>{% endif %}
+      {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+      {% if poll.status != 'open' %}<div class="alert alert-warning">Voting is closed.</div>{% endif %}
+      <form method="post" action="/poll/{{ poll.public_token }}">
+        {{ csrf_input(request) }}
+        <fieldset style="border:0;padding:0;margin:0 0 14px">
+          <legend><strong>Select every time that works for you</strong> <span class="muted" data-tz-label>({{ host_tz }})</span></legend>
+          {% for t in tallies %}
+          <label class="check slot" style="justify-content:space-between;margin-top:8px">
+            <span><input type="checkbox" name="options" value="{{ t.option.id }}" {{ 'disabled' if poll.status != 'open' }}> <span data-utc="{{ t.option.start_at }}">{{ t.start|dt(host_tz) }}</span></span>
+            <span class="muted">{{ t.count }} vote{{ 's' if t.count != 1 }}</span>
+          </label>
+          {% endfor %}
+        </fieldset>
+        <div class="inline-fields">
+          <div class="field"><label for="name">Your name</label><input id="name" type="text" name="name" required maxlength="200" value="{{ form_name or '' }}" autocomplete="name"></div>
+          <div class="field"><label for="email">Email</label><input id="email" type="email" name="email" required maxlength="320" value="{{ form_email or '' }}" autocomplete="email"></div>
+        </div>
+        <div style="position:absolute;left:-9999px" aria-hidden="true"><label for="website">Website</label><input id="website" type="text" name="website" tabindex="-1" autocomplete="off"></div>
+        <button class="btn btn-primary" type="submit" {{ 'disabled' if poll.status != 'open' }}>Submit availability</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+// Show candidate times in the visitor's own timezone (server renders host timezone as fallback).
+(function () {
+  try {
+    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    var fmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+    document.querySelectorAll('[data-utc]').forEach(function (el) { el.textContent = fmt.format(new Date(el.getAttribute('data-utc') + 'Z')); });
+    var l = document.querySelector('[data-tz-label]'); if (l) l.textContent = '(' + tz + ')';
+  } catch (e) {}
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}CRM{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="muted" style="margin:0"><a href="/app/contacts">← Contacts</a></p>
+    <h1>CRM</h1>
+    <p class="muted">Route visitors to their account owner and log bookings and routing submissions as CRM activities.</p>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <section class="card">
+    <h2>Connection</h2>
+    {% if conn %}
+      <p><strong>{{ conn.account_label or conn.provider }}</strong> <span class="badge badge-success">{{ conn.status }}</span></p>
+      {% if conn.last_error %}<p class="muted">Last error: {{ conn.last_error }}</p>{% endif %}
+      {% if is_admin %}
+      <form method="post" action="/app/contacts/crm/settings" class="stack">
+        {{ csrf_input(request) }}
+        {% set f = conn.settings_json or {} %}
+        <label><input type="checkbox" name="push_bookings" value="1" {{ 'checked' if f.get('push_bookings', True) }}> Log new bookings as activities</label>
+        <label><input type="checkbox" name="push_routing" value="1" {{ 'checked' if f.get('push_routing', True) }}> Log routing form submissions as activities</label>
+        <button class="btn btn-sm" type="submit">Save</button>
+      </form>
+      <form method="post" action="/app/contacts/crm/disconnect" class="mt">
+        {{ csrf_input(request) }}
+        <button class="btn btn-sm btn-danger" type="submit">Disconnect</button>
+      </form>
+      {% endif %}
+    {% else %}
+      <p class="muted">No CRM is connected.</p>
+      {% if is_admin %}
+      <div class="stack">
+      {% for p, label, ok in providers %}
+        <form method="post" action="/app/contacts/crm/connect" class="row">
+          {{ csrf_input(request) }}
+          <input type="hidden" name="provider" value="{{ p }}">
+          <button class="btn btn-sm {{ 'btn-primary' if p == 'mock' }}" type="submit" {{ 'disabled' if not ok }}>Connect {{ label }}</button>
+          {% if not ok %}<span class="muted">Set {{ 'SALESFORCE_CLIENT_ID / SALESFORCE_CLIENT_SECRET' if p == 'salesforce' else 'HUBSPOT_ACCESS_TOKEN or HUBSPOT_CLIENT_ID / HUBSPOT_CLIENT_SECRET' }} in .env</span>{% endif %}
+        </form>
+      {% endfor %}
+      </div>
+      {% else %}<p class="muted">Ask a workspace admin to connect a CRM.</p>{% endif %}
+    {% endif %}
+    <h3 class="mt">Test an owner lookup</h3>
+    <form method="post" action="/app/contacts/crm/lookup" class="row">
+      {{ csrf_input(request) }}
+      <label class="sr-only" for="lk-email">Email</label>
+      <input id="lk-email" type="email" name="email" placeholder="prospect@company.com" required style="flex:1">
+      <button class="btn btn-sm" type="submit">Look up</button>
+    </form>
+    <p class="help">Routing rules with the destination "CRM record owner" use this lookup.</p>
+  </section>
+
+  <section class="card">
+    <h2>Demo CRM records</h2>
+    <p class="muted">Records in the built-in CRM (used when "Built-in demo CRM" is connected).</p>
+    {% if records %}
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Email</th><th>Type</th><th>Owner</th><th><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>
+      {% for r in records %}
+        <tr><td>{{ r.email_normalized }}{% if r.name %}<br><span class="muted">{{ r.name }}{% if r.company %} · {{ r.company }}{% endif %}</span>{% endif %}</td>
+          <td>{{ r.object_type }}</td><td>{{ r.owner_email or '—' }}</td>
+          <td>{% if ctx.role != 'viewer' %}<form method="post" action="/app/contacts/crm/records/{{ r.id }}/delete">{{ csrf_input(request) }}<button class="btn btn-sm btn-ghost" type="submit">Delete</button></form>{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}<div class="empty">No records yet.</div>{% endif %}
+    {% if ctx.role != 'viewer' %}
+    <form method="post" action="/app/contacts/crm/records" class="stack mt">
+      {{ csrf_input(request) }}
+      <h3>Add or update a record</h3>
+      <div class="row">
+        <div style="flex:2"><label for="cr-email">Email</label><input id="cr-email" type="email" name="email" required></div>
+        <div><label for="cr-type">Type</label><select id="cr-type" name="object_type"><option value="contact">Contact</option><option value="lead">Lead</option></select></div>
+      </div>
+      <div class="row">
+        <div style="flex:1"><label for="cr-name">Name</label><input id="cr-name" type="text" name="name"></div>
+        <div style="flex:1"><label for="cr-co">Company</label><input id="cr-co" type="text" name="company"></div>
+      </div>
+      <div><label for="cr-owner">Owner email</label><input id="cr-owner" type="email" name="owner_email" placeholder="teammate@yourcompany.com"></div>
+      <button class="btn btn-sm btn-primary" type="submit">Save record</button>
+    </form>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card">
+  <h2>Activity log</h2>
+  {% if activities %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>When</th><th>Activity</th><th>Email</th><th>CRM</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+    <tbody>
+    {% for a in activities %}
+      <tr><td class="muted">{{ a.created_at|dt(user.default_timezone) }}</td>
+        <td>{{ a.subject }}</td><td>{{ a.email or '—' }}</td><td>{{ a.provider }}</td>
+        <td>{% if a.status == 'sent' %}<span class="badge badge-success">sent</span>{% elif a.status == 'failed' %}<span class="badge badge-danger" title="{{ a.error }}">failed</span>{% else %}<span class="badge">{{ a.status }}</span>{% endif %}</td>
+        <td>{% if a.status == 'failed' and is_admin %}<form method="post" action="/app/contacts/crm/activities/{{ a.id }}/retry">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Retry</button></form>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<div class="empty">Nothing has been logged to the CRM yet.</div>{% endif %}
+</section>
+{% endblock %}

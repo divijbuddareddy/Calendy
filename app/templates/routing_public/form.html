@@ -1,0 +1,20 @@
+{% extends "public_base.html" %}
+{% block title %}{{ rf.name }}{% endblock %}
+{% block content %}
+<div class="public-wrap" style="max-width:620px">
+  <form class="card" method="post" action="/r/{{ ws.slug }}/{{ rf.slug }}">
+    {{ csrf_input(request) }}
+    <p class="muted" style="margin:0">{{ ws.name }}</p>
+    <h1>{{ rf.name }}</h1>
+    <p class="muted">Answer a few questions and we'll connect you with the right person.</p>
+    {% include "routing_public/_fields.html" %}
+    {% for k, v in (utm or {}).items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+    <div aria-hidden="true" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden">
+      <label for="hp-website">Website (leave blank)</label>
+      <input id="hp-website" type="text" name="website" tabindex="-1" autocomplete="off">
+    </div>
+    <button class="btn btn-primary btn-block" type="submit">Continue</button>
+    <p class="help" style="text-align:center">Your answers are used only to route your request.</p>
+  </form>
+</div>
+{% endblock %}

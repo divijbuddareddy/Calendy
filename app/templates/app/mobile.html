@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Quick actions{% endblock %}
+{% block head %}
+<style>
+  .qa h2 { font-size: 1.05rem; margin: 0 0 10px; }
+  .qa-item { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .qa-item:last-child { border-bottom: 0; }
+  .qa-when { font-weight: 700; }
+  .qa-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .qa .btn { min-height: 40px; }
+  .qa details summary { cursor: pointer; color: var(--primary); font-weight: 600; }
+  .qa .link-box { display: flex; gap: 6px; } .qa .link-box input { flex: 1; min-width: 0; }
+  @media (max-width: 640px) { .qa-item { flex-direction: column; align-items: stretch; } .qa-actions { justify-content: flex-start; } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="qa" style="max-width:720px">
+  <div class="page-head"><div><h1>Quick actions</h1><p class="muted" style="margin:0">Times shown in {{ tz }}.</p></div>
+    <button class="btn btn-sm" id="install-btn" hidden>Install app</button></div>
+
+  {% if last_link %}
+  <div class="card" role="status">
+    <h2>Your new link</h2>
+    <div class="link-box"><input readonly value="{{ last_link }}" aria-label="New link"><button class="btn btn-primary" data-copy="{{ last_link }}">Copy</button></div>
+  </div>
+  {% endif %}
+
+  <section class="card" id="upcoming" aria-labelledby="up-h">
+    <h2 id="up-h">Upcoming meetings</h2>
+    {% for b in upcoming %}{% set e = names.get(b.event_type_id) %}{% set inv = b.invitees[0] if b.invitees else None %}
+    <div class="qa-item">
+      <div>
+        <div class="qa-when">{{ b.start_at|dt(tz, '%a %d %b, %H:%M') }}</div>
+        <div class="muted" style="font-size:.88rem">{{ e.name if e else 'Meeting' }}{% if inv %} · {{ inv.name }}{% endif %}{% if b.status != 'confirmed' %} · <span class="badge badge-warning">{{ b.status|replace('_',' ') }}</span>{% endif %}</div>
+      </div>
+      <div class="qa-actions">
+        {% set join = b.location_json.get('join_url') if b.location_json is mapping else None %}
+        {% if join %}<a class="btn btn-sm btn-primary" href="{{ join }}" target="_blank" rel="noopener">Join</a>{% endif %}
+        <a class="btn btn-sm" href="/app/scheduled/{{ b.id }}">Details</a>
+        {% if ctx.role != 'viewer' %}
+        <details>
+          <summary class="btn btn-sm btn-ghost">Cancel…</summary>
+          <form method="post" action="/app/m/bookings/{{ b.id }}/cancel" class="mt">{{ csrf_input(request) }}
+            <label class="sr-only" for="r-{{ b.id }}">Reason</label>
+            <input id="r-{{ b.id }}" name="reason" placeholder="Reason (sent to invitee)">
+            <button class="btn btn-sm btn-danger mt" data-confirm="Cancel this meeting and notify the invitee?">Cancel meeting</button>
+          </form>
+        </details>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <p class="muted" style="margin:0">No upcoming meetings.</p>
+    {% endfor %}
+  </section>
+
+  <section class="card" id="links" aria-labelledby="links-h">
+    <h2 id="links-h">Share a link</h2>
+    {% if profile_url %}
+    <div class="qa-item"><div><strong>Your booking page</strong><div class="muted" style="font-size:.85rem;word-break:break-all">{{ profile_url }}</div></div>
+      <div class="qa-actions"><button class="btn btn-sm btn-primary" data-copy="{{ profile_url }}">Copy</button>
+        <button class="btn btn-sm" data-share="{{ profile_url }}" hidden>Share</button></div></div>
+    {% endif %}
+    {% for e in event_types %}
+    <div class="qa-item">
+      <div><span class="color-dot" style="background:{{ e.color }}"></span> <strong>{{ e.name }}</strong> <span class="muted">· {{ e.duration }} min</span></div>
+      <div class="qa-actions">
+        <button class="btn btn-sm btn-primary" data-copy="{{ urls[e.id] }}">Copy link</button>
+        <button class="btn btn-sm" data-share="{{ urls[e.id] }}" hidden>Share</button>
+        {% if can_edit(e) and has_feature(workspace, 'single_use') %}<button class="btn btn-sm" data-single-use="{{ e.id }}">Single-use link</button>{% endif %}
+      </div>
+    </div>
+    {% else %}
+    <p class="muted">No active event types yet. <a href="/app/event-types/new">Create one</a>.</p>
+    {% endfor %}
+  </section>
+
+  {% if has_feature(workspace, 'one_off') and ctx.role != 'viewer' %}
+  <section class="card" aria-labelledby="oo-h">
+    <h2 id="oo-h">New one-off meeting link</h2>
+    <form method="post" action="/app/m/one-off">{{ csrf_input(request) }}
+      <div class="field"><label for="oo-name">Meeting name</label><input id="oo-name" name="name" required placeholder="Quick catch-up"></div>
+      <div class="grid grid-2">
+        <div class="field"><label for="oo-dur">Duration (minutes)</label><input type="number" id="oo-dur" name="duration" value="30" min="5" max="720"></div>
+        <div class="field"><label for="oo-loc">Location</label><select id="oo-loc" name="location"><option value="google_meet">Google Meet</option><option value="zoom">Zoom</option><option value="teams">Microsoft Teams</option><option value="phone">Phone call</option></select></div>
+      </div>
+      <div class="field"><label for="oo-t1">Time ({{ tz }})</label><input type="datetime-local" id="oo-t1" name="slots" value="{{ default_time }}" required></div>
+      <div class="field"><label for="oo-t2">Another time <span class="muted">(optional)</span></label><input type="datetime-local" id="oo-t2" name="slots"></div>
+      <button class="btn btn-primary btn-block">Create link</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  if (navigator.share) document.querySelectorAll('[data-share]').forEach(b => { b.hidden = false;
+    b.addEventListener('click', () => navigator.share({ url: b.dataset.share }).catch(() => {})); });
+  document.querySelectorAll('[data-single-use]').forEach(b => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try {
+      const r = await api('/app/event-types/' + b.dataset.singleUse + '/single-use', { method: 'POST' });
+      await navigator.clipboard.writeText(r.url).catch(() => {});
+      toast('Single-use link copied'); b.textContent = 'Copied ✓';
+      const box = document.createElement('input'); box.readOnly = true; box.value = r.url; box.setAttribute('aria-label', 'Single-use link');
+      b.closest('.qa-item').appendChild(box);
+    } catch (e) { toast(e.message || 'Could not create link'); b.disabled = false; }
+  }));
+  let deferred; const ib = document.getElementById('install-btn');
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; ib.hidden = false; });
+  ib.addEventListener('click', async () => { if (!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; ib.hidden = true; });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "public_base.html" %}
+{% block title %}Log in · {{ app_name }}{% endblock %}
+{% block head %}{% include "auth/_auth_head.html" %}{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <a class="brand" href="/"><span class="brand-mark">A</span> {{ app_name }}</a>
+  <div class="card auth-card">
+    <h1>Welcome back</h1>
+    {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+    {% if google_enabled %}
+    <a class="btn btn-block" href="/auth/google/start?next={{ next|urlencode }}">Continue with Google</a>
+    <div class="or">or</div>
+    {% endif %}
+    <form method="post" action="/login">
+      {{ csrf_input(request) }}
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="field"><label for="email">Email</label><input type="email" id="email" name="email" autocomplete="email" required value="{{ email }}" autofocus></div>
+      <div class="field"><div class="spread"><label for="password">Password</label><a href="/forgot-password" style="font-size:.82rem">Forgot password?</a></div>
+        <input type="password" id="password" name="password" autocomplete="current-password" required></div>
+      <button class="btn btn-primary btn-block" type="submit">Log in</button>
+    </form>
+    {% if demo_enabled %}
+    <div class="or">or</div>
+    <form method="post" action="/login">
+      {{ csrf_input(request) }}
+      <input type="hidden" name="next" value="{{ next }}">
+      <input type="hidden" name="email" value="demo@example.com">
+      <input type="hidden" name="password" value="demo1234">
+      <button class="btn btn-block" type="submit">Try the demo account</button>
+      <p class="help" style="text-align:center">demo@example.com · demo1234</p>
+    </form>
+    {% endif %}
+  </div>
+  <p class="auth-alt">New here? <a href="/signup">Create an account</a></p>
+</div>
+{% endblock %}

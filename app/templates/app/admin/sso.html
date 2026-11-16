@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}SSO &amp; SCIM{% if active %}<form method="post" action="/app/admin/sso/test" class="mt">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Test SSO sign-in</button></form>{% endif %}
+
+<section class="card mt" id="domains">
+  <h2>Domain verification</h2>
+  <p class="muted">Prove you own an email domain by publishing a DNS TXT record. Verified domains are added to approved domains, can sign in via SSO, and are covered by SSO enforcement and login-method policies.</p>
+  {% if not domain_ok %}<p class="alert alert-info">Domain control is available on the Enterprise plan.</p>
+  {% else %}
+  <form method="post" action="/app/admin/domains" class="row">{{ csrf_input(request) }}
+    <label class="sr-only" for="claim-domain">Domain</label>
+    <input id="claim-domain" type="text" name="domain" placeholder="acme.com" required>
+    <button class="btn btn-primary btn-sm" type="submit">Add domain</button>
+  </form>
+  {% if claims %}
+  <div class="table-wrap mt"><table class="table">
+    <thead><tr><th>Domain</th><th>TXT record</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for c, rec in claims %}
+      <tr>
+        <td><strong>{{ c.domain }}</strong></td>
+        <td><small>Host <code>{{ rec.host }}</code> (or <code>{{ rec.alt_host }}</code>)<br>Value <code>{{ rec.value }}</code></small></td>
+        <td>{% if c.verified_at %}<span class="badge badge-success">Verified</span>{% else %}<span class="badge badge-warning">Pending</span>{% if c.last_error %}<br><small>{{ c.last_error }}</small>{% endif %}{% endif %}</td>
+        <td class="row">
+          {% if not c.verified_at %}<form method="post" action="/app/admin/domains/{{ c.id }}/verify" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Verify</button></form>{% endif %}
+          <form method="post" action="/app/admin/domains/{{ c.id }}/delete" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Remove {{ c.domain }}?">Remove</button></form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+  {% endif %}
+</section>
+{% endblock %}
+{% block content %}
+{% include "app/admin/_tabs.html" %}
+{% if active %}<div class="alert alert-success" role="status"><strong>SAML sign-in is active.</strong> Members sign in at <a href="{{ sp.login_url }}">{{ sp.login_url }}</a>{% if sso.enforce_sso %}; password sign-in is blocked for verified domains ({{ verified|join(', ') }}){% endif %}.</div>
+{% endif %}
+<div class="grid grid-2">
+  <section class="card">
+    <h2>Service provider details</h2>
+    <p class="muted">Give these values to your identity provider (Okta, Entra ID, Google Workspace…).</p>
+    <div class="field"><label>SP entity ID</label><div class="row"><code>{{ sp.entity_id }}</code><button class="btn btn-sm btn-ghost" type="button" data-copy="{{ sp.entity_id }}">Copy</button></div></div>
+    <div class="field"><label>ACS URL (HTTP-POST)</label><div class="row"><code>{{ sp.acs_url }}</code><button class="btn btn-sm btn-ghost" type="button" data-copy="{{ sp.acs_url }}">Copy</button></div></div>
+    <div class="field"><label>SP-initiated login URL</label><div class="row"><code>{{ sp.login_url }}</code><button class="btn btn-sm btn-ghost" type="button" data-copy="{{ sp.login_url }}">Copy</button></div></div>
+    <div class="field"><label>Metadata</label><a href="{{ sp.metadata_url }}" target="_blank" rel="noopener">{{ sp.metadata_url }}</a></div>
+    <p class="help">NameID format: email address (or an <code>email</code> attribute). Sign the assertion or response with RSA-SHA256; encrypted assertions are not supported. Only users on <a href="#domains">verified domains</a> can sign in via SSO; new users are provisioned just-in-time unless disabled in Security policies.</p>
+  </section>
+  <form class="card" method="post" action="/app/admin/sso">
+    {{ csrf_input(request) }}
+    <h2>Identity provider</h2>
+    {% if not sso_ok %}<p class="alert alert-info">SAML SSO is available on the Enterprise plan.</p>{% endif %}
+    <div class="field"><label for="idp_entity_id">IdP entity ID</label><input id="idp_entity_id" type="text" name="idp_entity_id" value="{{ sso.idp_entity_id if sso and sso.idp_entity_id else '' }}"></div>
+    <div class="field"><label for="idp_sso_url">IdP SSO URL</label><input id="idp_sso_url" type="url" name="idp_sso_url" placeholder="https://" value="{{ sso.idp_sso_url if sso and sso.idp_sso_url else '' }}"></div>
+    <div class="field"><label for="idp_x509_cert">IdP x509 signing certificate (PEM)</label>
+      <textarea id="idp_x509_cert" name="idp_x509_cert" rows="5" placeholder="-----BEGIN CERTIFICATE-----">{{ sso.idp_x509_cert if sso and sso.idp_x509_cert else '' }}</textarea>
+      {% if cert %}<p class="help">{% if cert.valid %}Subject: {{ cert.subject }} · expires {{ cert.not_after | dt }} {% if cert.expired %}<span class="badge badge-danger">Expired</span>{% endif %}{% else %}<span class="badge badge-danger">Unreadable certificate</span>{% endif %}</p>{% endif %}
+    </div>
+    <label class="check"><input type="checkbox" name="enabled" value="1" {{ 'checked' if sso and sso.enabled }}> Mark configuration as ready</label>
+    <label class="check"><input type="checkbox" name="enforce_sso" value="1" {{ 'checked' if sso and sso.enforce_sso }}> Enforce SSO (block password sign-in for users on verified domains)</label>
+    <div class="mt"><button class="btn btn-primary" type="submit" {{ 'disabled' if not sso_ok }}>Save SSO configuration</button></div>
+    <p class="help">Status: {% if active %}active{% if sso.enforce_sso %}, enforced{% endif %}{% elif sso and sso.enabled %}configured{% else %}not configured{% endif %}.</p>
+  </form>
+</div>
+
+<section class="card mt">
+  <h2>SCIM 2.0 provisioning</h2>
+  <p class="muted">Base URL <code>{{ sp.scim_base }}</code> · authentication: Bearer token. Supports Users (list with filters <code>eq/ne/co/sw/ew/pr</code> joined by <code>and</code>/<code>or</code>, <code>startIndex</code>/<code>count</code> paging, create, get, patch/put, delete) and Groups mapped to Teams (list/filter, create, get, patch members add/remove/replace, put, delete), plus ServiceProviderConfig, ResourceTypes and Schemas.</p>
+  {% if new_token %}
+  <div class="alert alert-success" role="status">
+    <strong>Copy this token now - it will not be shown again.</strong>
+    <div class="row mt"><code id="scim-token">{{ new_token }}</code><button class="btn btn-sm" type="button" data-copy="{{ new_token }}">Copy</button></div>
+  </div>
+  {% endif %}
+  {% if not scim_ok %}<p class="alert alert-info">SCIM provisioning is available on the Enterprise plan.</p>
+  {% else %}
+  <div class="row">
+    <span class="badge {{ 'badge-success' if sso and sso.scim_token_hash else '' }}">{{ 'Token active' if sso and sso.scim_token_hash else 'No token' }}</span>
+    <form method="post" action="/app/admin/scim-token" style="margin:0">{{ csrf_input(request) }}
+      <button class="btn btn-primary btn-sm" type="submit" {% if sso and sso.scim_token_hash %}data-confirm="Rotating invalidates the current token. Continue?"{% endif %}>{{ 'Rotate token' if sso and sso.scim_token_hash else 'Generate token' }}</button></form>
+    {% if sso and sso.scim_token_hash %}
+    <form method="post" action="/app/admin/scim-token/revoke" style="margin:0">{{ csrf_input(request) }}
+      <button class="btn btn-danger btn-sm" type="submit" data-confirm="Revoke the SCIM token?">Revoke</button></form>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% if active %}<form method="post" action="/app/admin/sso/test" class="mt">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Test SSO sign-in</button></form>{% endif %}
+
+<section class="card mt" id="domains">
+  <h2>Domain verification</h2>
+  <p class="muted">Prove you own an email domain by publishing a DNS TXT record. Verified domains are added to approved domains, can sign in via SSO, and are covered by SSO enforcement and login-method policies.</p>
+  {% if not domain_ok %}<p class="alert alert-info">Domain control is available on the Enterprise plan.</p>
+  {% else %}
+  <form method="post" action="/app/admin/domains" class="row">{{ csrf_input(request) }}
+    <label class="sr-only" for="claim-domain">Domain</label>
+    <input id="claim-domain" type="text" name="domain" placeholder="acme.com" required>
+    <button class="btn btn-primary btn-sm" type="submit">Add domain</button>
+  </form>
+  {% if claims %}
+  <div class="table-wrap mt"><table class="table">
+    <thead><tr><th>Domain</th><th>TXT record</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for c, rec in claims %}
+      <tr>
+        <td><strong>{{ c.domain }}</strong></td>
+        <td><small>Host <code>{{ rec.host }}</code> (or <code>{{ rec.alt_host }}</code>)<br>Value <code>{{ rec.value }}</code></small></td>
+        <td>{% if c.verified_at %}<span class="badge badge-success">Verified</span>{% else %}<span class="badge badge-warning">Pending</span>{% if c.last_error %}<br><small>{{ c.last_error }}</small>{% endif %}{% endif %}</td>
+        <td class="row">
+          {% if not c.verified_at %}<form method="post" action="/app/admin/domains/{{ c.id }}/verify" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Verify</button></form>{% endif %}
+          <form method="post" action="/app/admin/domains/{{ c.id }}/delete" style="margin:0">{{ csrf_input(request) }}<button class="btn btn-sm btn-danger" type="submit" data-confirm="Remove {{ c.domain }}?">Remove</button></form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

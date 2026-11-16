@@ -1,0 +1,26 @@
+{% extends "legal/_layout.html" %}
+{% block title %}Data retention policy · {{ app_name }}{% endblock %}
+{% block legal %}
+<h1>Data retention policy</h1>
+<p class="muted">Version {{ versions.retention }} · Initial policy</p>
+<p>We keep personal data only as long as the purposes in our <a href="/privacy">privacy notice</a> need it. Automated jobs
+enforce the periods below. Workspace admins can shorten or extend booking retention in <em>Admin → Security</em>.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Data</th><th>Retention</th><th>What happens at the end</th></tr></thead>
+  <tbody>
+    <tr><td>Invitee personal data on bookings (name, email, phone, answers)</td><td>{{ booking_days }} days after the meeting by default. Each workspace can change this (minimum 30 days)</td><td>Anonymised. Aggregate fields (status, time, event type, UTM source) stay for reporting</td></tr>
+    <tr><td>Host account data</td><td>While the account is active</td><td>Deleting an account disables it immediately; personal fields are anonymised after {{ account_purge_days }} days</td></tr>
+    <tr><td>Data-export files</td><td>7 days</td><td>Deleted. You can request a new export at any time</td></tr>
+    <tr><td>Notetaker transcripts and recaps</td><td>{{ recap_days }} days by default; the host can change this per recap</td><td>Deleted, with a short tombstone so old links show "expired"</td></tr>
+    <tr><td>Calendar OAuth tokens</td><td>Until the calendar is disconnected or the account is deleted</td><td>Deleted and revoked</td></tr>
+    <tr><td>Audit log (security and admin actions)</td><td>2 years</td><td>Deleted. Workspace admins can export it before then</td></tr>
+    <tr><td>Email, SMS and webhook delivery logs</td><td>90 days</td><td>Deleted</td></tr>
+    <tr><td>Database backups</td><td>Daily backups kept for 7 days, plus the hosting plan's point-in-time recovery window</td><td>Rotated out automatically. Deleted data leaves the backups when they expire</td></tr>
+  </tbody>
+</table></div>
+<h2>Legal holds</h2>
+<p>We may keep data longer where the law requires it (for example tax records for payments) or to establish or defend legal claims.</p>
+<h2>Requests</h2>
+<p>Hosts can export or delete their data from <em>Settings → Data &amp; privacy</em>. Workspace admins can delete data for
+specific invitees in <em>Admin → Data deletion</em>. Anyone can email <a href="mailto:{{ contact }}">{{ contact }}</a>.</p>
+{% endblock %}

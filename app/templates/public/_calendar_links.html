@@ -1,0 +1,5 @@
+<div class="row" role="group" aria-label="{{ t('confirm.add_to_calendar') }}">
+  <a class="btn btn-sm" href="{{ google_url }}" target="_blank" rel="noopener">{{ t('cal.google') }}</a>
+  <a class="btn btn-sm" href="{{ outlook_url }}" target="_blank" rel="noopener">{{ t('cal.outlook') }}</a>
+  <a class="btn btn-sm" href="/booking/{{ b.manage_token }}/ics" download>{{ t('cal.ics') }}</a>
+</div>

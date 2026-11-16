@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}{{ c.name or c.email_normalized }}{% endblock %}
+{% block content %}
+{% set writable = ctx.role != 'viewer' %}
+<div class="page-head">
+  <div class="row">
+    <span class="avatar" aria-hidden="true">{{ (c.name or c.email_normalized)[:1]|upper }}</span>
+    <div>
+      <p class="muted" style="margin:0"><a href="/app/contacts">← Contacts</a></p>
+      <h1 style="margin:0">{{ c.name or c.email_normalized }}</h1>
+      <p class="muted" style="margin:0">{{ c.email_normalized }}{% if c.company %} · {{ c.company }}{% endif %}
+        {% if c.unsubscribed %}<span class="badge badge-warning">Unsubscribed</span>{% endif %}</p>
+    </div>
+  </div>
+  <div class="row">
+    {% if share_url %}<button class="btn" type="button" data-copy="{{ share_url }}">Share availability</button>{% endif %}
+    <a class="btn" href="mailto:{{ c.email_normalized }}">Email</a>
+  </div>
+</div>
+
+<div class="grid grid-4" style="margin-bottom:16px">
+  <div class="card stat"><div class="num">{{ total }}</div><div class="lbl">Meetings booked</div></div>
+  <div class="card stat"><div class="num">{{ upcoming|length }}</div><div class="lbl">Upcoming</div></div>
+  <div class="card stat"><div class="num">{{ completed }}</div><div class="lbl">Completed</div></div>
+  <div class="card stat"><div class="num">{{ cancelled }}</div><div class="lbl">Cancelled</div></div>
+</div>
+
+<section class="card" id="insights" style="margin-bottom:16px">
+  <h2>Relationship insights</h2>
+  <div class="grid grid-4">
+    <div><div class="muted">Last meeting</div><strong>{{ insights.last_meeting|dt(user.default_timezone) if insights.last_meeting else '—' }}</strong></div>
+    <div><div class="muted">Next meeting</div><strong>{{ insights.next_meeting|dt(user.default_timezone) if insights.next_meeting else '—' }}</strong></div>
+    <div><div class="muted">Cancel rate</div><strong>{{ '%.0f%%'|format(insights.cancel_rate) if insights.cancel_rate is not none else '—' }}</strong></div>
+    <div><div class="muted">No-show rate</div><strong>{{ '%.0f%%'|format(insights.no_show_rate) if insights.no_show_rate is not none else '—' }}</strong></div>
+  </div>
+  <p class="mt" style="margin-bottom:0"><span class="muted">Top event types:</span>
+    {% for t in insights.top_event_types %}{{ t.name }} ({{ t.count }}){{ ', ' if not loop.last }}{% else %}—{% endfor %}
+    {% if crm_owner %} · <span class="muted">CRM owner:</span> {{ crm_owner.owner_email }} ({{ crm_owner.record_type }}){% endif %}
+    {% if c.company %} · <a href="/app/contacts/insights">{{ c.company }} insights</a>{% endif %}</p>
+</section>
+
+<div class="grid grid-2">
+  <div>
+    <section class="card">
+      <h2>Book another meeting</h2>
+      {% if events %}
+      <form method="get" action="/app/contacts/{{ c.id }}/book" class="row" target="_blank">
+        <label class="sr-only" for="b-et">Event type</label>
+        <select id="b-et" name="event_type_id" style="flex:1">{% for e in events %}<option value="{{ e.id }}">{{ e.name }} ({{ e.duration }} min)</option>{% endfor %}</select>
+        <button class="btn btn-primary" type="submit">Open booking page ↗</button>
+      </form>
+      <p class="help">Opens the booking page with {{ c.name or 'their' }} name and email prefilled. Or copy a link to send:</p>
+      <div class="row">{% for e in events[:6] %}{% if event_urls[e.id] %}<button class="btn btn-sm" type="button" data-copy="{{ event_urls[e.id] }}?name={{ (c.name or '')|urlencode }}&email={{ c.email_normalized|urlencode }}">Copy “{{ e.name }}” link</button>{% endif %}{% endfor %}</div>
+      {% else %}<p class="muted">Create an active event type to book from here.</p>{% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Meeting history</h2>
+      {% if upcoming %}
+        <h3>Upcoming</h3>
+        <ul class="stack" style="list-style:none;padding:0">
+        {% for b in upcoming %}{% set e = ets.get(b.event_type_id) %}
+          <li class="spread"><div><strong>{{ e.name if e else 'Meeting' }}</strong> <span class="badge badge-primary">{{ b.status }}</span><br>
+            <span class="muted">{{ b.start_at|dt(user.default_timezone) }} · with {{ hosts[b.host_id].name if b.host_id in hosts else 'host' }}</span></div>
+            <a class="btn btn-sm" href="/app/scheduled/{{ b.id }}">Details</a></li>
+        {% endfor %}
+        </ul>
+      {% endif %}
+      {% if past %}
+        <h3 class="mt">Past</h3>
+        <ol class="stack" style="list-style:none;padding:0;border-left:2px solid var(--border);padding-left:14px">
+        {% for b in past %}{% set e = ets.get(b.event_type_id) %}
+          <li><strong>{{ e.name if e else 'Meeting' }}</strong>
+            {% if b.status == 'cancelled' %}<span class="badge badge-danger">Cancelled</span>
+            {% elif b.no_show %}<span class="badge badge-warning">No-show</span>
+            {% elif b.status == 'rescheduled' %}<span class="badge">Rescheduled</span>
+            {% elif b.status == 'confirmed' %}<span class="badge badge-success">Completed</span>
+            {% else %}<span class="badge">{{ b.status }}</span>{% endif %}<br>
+            <span class="muted">{{ b.start_at|dt(user.default_timezone) }} · with {{ hosts[b.host_id].name if b.host_id in hosts else 'host' }}</span></li>
+        {% endfor %}
+        </ol>
+      {% endif %}
+      {% if not upcoming and not past %}<div class="empty">No meetings yet.</div>{% endif %}
+      {% if subs %}
+        <h3 class="mt">Routing form submissions</h3>
+        <ul style="padding-left:18px">{% for s in subs %}<li>{{ s.created_at|dt(user.default_timezone) }} — {{ 'booked' if s.booking_id else 'not booked' }}</li>{% endfor %}</ul>
+      {% endif %}
+    </section>
+  </div>
+
+  <div>
+    <form class="card" method="post" action="/app/contacts/{{ c.id }}/edit">
+      {{ csrf_input(request) }}
+      <h2>Details</h2>
+      <fieldset {{ 'disabled' if not writable }} style="border:0;padding:0;margin:0">
+      <div class="inline-fields">
+        <div><label for="e-name">Name</label><input id="e-name" type="text" name="name" value="{{ c.name }}"></div>
+        <div><label for="e-email">Email</label><input id="e-email" type="email" name="email" value="{{ c.email_normalized }}" required></div>
+      </div>
+      <div class="inline-fields mt">
+        <div><label for="e-phone">Phone</label><input id="e-phone" type="tel" name="phone" value="{{ c.phone or '' }}"></div>
+        <div><label for="e-company">Company</label><input id="e-company" type="text" name="company" value="{{ c.company or '' }}"></div>
+        <div><label for="e-tz">Timezone</label><input id="e-tz" type="text" name="timezone" value="{{ c.timezone or '' }}" placeholder="Europe/London"></div>
+      </div>
+      <div class="field mt"><label for="e-tags">Tags</label><input id="e-tags" type="text" name="tags" value="{{ (c.tags_json or [])|join(', ') }}"><p class="help">Comma separated.</p></div>
+      <div class="field"><label for="e-notes">Notes</label><textarea id="e-notes" name="notes" rows="4">{{ c.notes or '' }}</textarea></div>
+      {% if writable %}<button class="btn btn-primary" type="submit">Save</button>{% endif %}
+      </fieldset>
+      <p class="help">Source: {{ c.source }} · added {{ c.created_at|dt(user.default_timezone, '%d %b %Y') }}</p>
+    </form>
+
+    <section class="card" id="custom">
+      <h2>Custom fields</h2>
+      {% if c.custom_json %}
+      <table class="table"><tbody>
+        {% for k, v in c.custom_json.items() %}
+        <tr><th scope="row" style="text-transform:none;letter-spacing:0">{{ k }}</th><td>{{ v }}</td>
+          <td style="text-align:right">{% if writable %}<form method="post" action="/app/contacts/{{ c.id }}/custom" style="margin:0">{{ csrf_input(request) }}<input type="hidden" name="remove" value="{{ k }}"><button class="btn btn-sm btn-ghost" type="submit" aria-label="Remove {{ k }}">✕</button></form>{% endif %}</td></tr>
+        {% endfor %}
+      </tbody></table>
+      {% else %}<p class="muted">No custom fields.</p>{% endif %}
+      {% if writable %}
+      <form method="post" action="/app/contacts/{{ c.id }}/custom" class="inline-fields mt">
+        {{ csrf_input(request) }}
+        <div><label for="cf-k">Field</label><input id="cf-k" type="text" name="key" required placeholder="Plan"></div>
+        <div><label for="cf-v">Value</label><input id="cf-v" type="text" name="value" placeholder="Enterprise"></div>
+        <div style="flex:0;align-self:flex-end"><button class="btn" type="submit">Add</button></div>
+      </form>
+      {% endif %}
+    </section>
+
+    {% if writable %}
+    <section class="card">
+      <h2>Communication preferences</h2>
+      <p class="muted">{% if c.unsubscribed %}This contact is suppressed from marketing communications. Transactional booking emails are still sent.{% else %}This contact can receive marketing follow-ups.{% endif %}</p>
+      <div class="row">
+        <form method="post" action="/app/contacts/{{ c.id }}/unsubscribe" style="margin:0">{{ csrf_input(request) }}
+          <button class="btn" type="submit">{{ 'Resubscribe' if c.unsubscribed else 'Unsubscribe / suppress' }}</button></form>
+        <form method="post" action="/app/contacts/{{ c.id }}/delete" style="margin:0">{{ csrf_input(request) }}
+          <button class="btn btn-danger" type="submit" data-confirm="Delete this contact?">Delete contact</button></form>
+      </div>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

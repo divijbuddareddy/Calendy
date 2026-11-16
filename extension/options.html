@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AAL Scheduler: settings</title>
+  <link rel="stylesheet" href="popup.css">
+  <style>
+    body { width: auto; max-width: 520px; margin: 24px auto; padding: 0 16px; max-height: none; }
+    label { display: block; font-weight: 600; margin: 14px 0 4px; }
+    input { width: 100%; font: inherit; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+    .help { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+    .row { display: flex; gap: 8px; margin-top: 16px; align-items: center; }
+    #status { margin-top: 12px; }
+    .ok { color: #12795a; }
+  </style>
+</head>
+<body>
+  <h1 style="font-size:18px">Connect AAL Scheduler</h1>
+  <form id="form">
+    <label for="server">Server URL</label>
+    <input id="server" type="url" placeholder="https://aal-scheduler.onrender.com" required>
+    <p class="help">The address you use to sign in, without a path.</p>
+    <label for="key">API key</label>
+    <input id="key" type="password" placeholder="aal_sk_…" autocomplete="off" required>
+    <p class="help">Create one in the web app under <em>Integrations → API keys</em>. Give it <strong>read</strong> and
+      <strong>write</strong> scopes to create single-use links. The key is stored only in this browser profile.</p>
+    <div class="row"><button class="primary" type="submit">Save &amp; test</button><button type="button" id="clear">Disconnect</button></div>
+    <div id="status" role="status" aria-live="polite"></div>
+  </form>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

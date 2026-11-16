@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="{{ locale or 'en' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token(request) }}">
+  <meta name="privacy-version" content="{{ privacy_version }}">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  {% if brand_color %}<style>:root{--primary: {{ brand_color }};}</style>{% endif %}
+  {% block head %}{% endblock %}
+</head>
+<body class="{{ 'embedded' if embedded }}">
+<main id="main">
+  {% for f in get_flashes(request) %}
+    <div class="public-wrap"><div class="alert alert-{{ f.kind }}" role="status">{{ f.message }}</div></div>
+  {% endfor %}
+  {% block content %}{% endblock %}
+  {% if not embedded %}<p class="powered">{% if not hide_branding %}{{ t('common.powered_by') }} <a href="/">{{ app_name }}</a> · {% endif %}<a href="/privacy">{{ t('common.privacy') }}</a> · <a href="/terms">{{ t('common.terms') }}</a> · <a href="/data-retention">{{ t('common.data_retention') }}</a></p>
+  {% set cur_locale = locale or 'en' %}
+  <form class="powered lang-switch" style="display:flex;gap:6px;align-items:center;justify-content:center;margin-top:0" method="get" action="{{ ssr.path if ssr is defined and ssr and ssr.path else request.url.path }}">
+    {% for k, v in request.query_params.multi_items() if k != 'lang' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+    <label for="lang-select">{{ t('common.language') }}</label>
+    <select id="lang-select" name="lang" style="width:auto" onchange="this.form.submit()">
+      {% for code, native in supported_locales.items() %}<option value="{{ code }}" lang="{{ code }}" {{ 'selected' if code == cur_locale }}>{{ native }}</option>{% endfor %}
+    </select>
+    <noscript><button type="submit" class="btn btn-sm">{{ t('common.apply') }}</button></noscript>
+  </form>
+  {% elif not hide_branding %}<p class="powered">{{ t('common.powered_by') }} <a href="/">{{ app_name }}</a></p>{% endif %}
+</main>
+<script src="/static/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,91 @@
+{% extends "public_base.html" %}
+{% block title %}Get started · {{ app_name }}{% endblock %}
+{% block head %}{% include "auth/_auth_head.html" %}
+<style>
+  .ob-wrap { max-width: 620px; margin: 40px auto; padding: 0 16px; }
+  .steps { display: flex; gap: 6px; margin: 18px 0; }
+  .steps span { flex: 1; height: 6px; border-radius: 3px; background: var(--border); }
+  .steps span.done { background: var(--primary); }
+  .day-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .day-pills label { margin: 0; }
+  .day-pills input { position: absolute; opacity: 0; }
+  .day-pills span { display: inline-block; padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; font-weight: 600; }
+  .day-pills input:checked + span { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+  .day-pills input:focus-visible + span { outline: 3px solid var(--primary); outline-offset: 2px; }
+</style>
+{% endblock %}
+{% block content %}
+{% set idx = steps.index(step) %}
+<div class="ob-wrap">
+  <a class="brand" href="/app" style="justify-content:center"><span class="brand-mark">A</span> {{ app_name }}</a>
+  <div class="steps" aria-label="Step {{ idx + 1 }} of {{ steps|length }}">{% for s in steps %}<span class="{{ 'done' if loop.index0 <= idx }}"></span>{% endfor %}</div>
+  <div class="card auth-card">
+  {% if step == 'profile' %}
+    <h1>Set up your booking page</h1>
+    <p class="muted" style="text-align:center">This is the link people will use to book time with you.</p>
+    <form method="post" action="/onboarding">{{ csrf_input(request) }}<input type="hidden" name="step" value="profile">
+      <div class="field"><label for="name">Your name</label><input id="name" name="name" value="{{ user.name }}" required></div>
+      <div class="field"><label for="slug">Your link</label>
+        <div class="row" style="flex-wrap:nowrap"><span class="muted" style="white-space:nowrap">{{ base_url }}/</span><input id="slug" name="slug" value="{{ user.slug or '' }}" required pattern="[a-z0-9-]+"></div>
+        <div class="help">Lowercase letters, numbers and hyphens.</div></div>
+      <div class="field"><label for="timezone">Timezone</label><select id="timezone" name="timezone">{% for z in timezones %}<option value="{{ z }}" {{ 'selected' if z == user.default_timezone }}>{{ z|replace('_',' ') }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="headline">Headline <span class="muted">(optional)</span></label><input id="headline" name="headline" value="{{ user.headline or '' }}" placeholder="e.g. Product designer at Acme"></div>
+      <button class="btn btn-primary btn-block">Continue</button>
+    </form>
+
+  {% elif step == 'calendar' %}
+    <h1>Connect your calendar</h1>
+    <p class="muted" style="text-align:center">We check your calendar so people can only book when you're actually free, and add new meetings to it automatically.</p>
+    {% if connections %}
+      {% for c in connections %}<div class="alert {{ 'alert-success' if c.status == 'connected' else 'alert-warning' }}">{{ c.provider|capitalize }} {{ c.account_email or '' }} — {{ c.status }}</div>{% endfor %}
+    {% endif %}
+    <a class="btn btn-primary btn-block" href="/app/integrations?next=/onboarding?step=availability">{{ 'Manage calendars' if connections else 'Connect a calendar' }}</a>
+    <a class="btn btn-ghost btn-block mt" href="/onboarding?step=availability">{{ 'Continue' if connections else 'Skip for now' }}</a>
+
+  {% elif step == 'availability' %}
+    <h1>When are you available?</h1>
+    <p class="muted" style="text-align:center">You can fine-tune hours, add breaks and holidays later.</p>
+    <form method="post" action="/onboarding">{{ csrf_input(request) }}<input type="hidden" name="step" value="availability">
+      <fieldset style="border:0;padding:0;margin:0 0 14px"><legend style="font-weight:600;font-size:.88rem;margin-bottom:8px">Available days</legend>
+        <div class="day-pills">{% for d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}<label><input type="checkbox" name="days" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in days }}><span>{{ d }}</span></label>{% endfor %}</div>
+      </fieldset>
+      <div class="grid grid-2">
+        <div class="field"><label for="start">From</label><input type="time" id="start" name="start" value="{{ start }}" required></div>
+        <div class="field"><label for="end">To</label><input type="time" id="end" name="end" value="{{ end }}" required></div>
+      </div>
+      <p class="help">Times are in {{ user.default_timezone }}.</p>
+      <button class="btn btn-primary btn-block">Continue</button>
+    </form>
+
+  {% elif step == 'event' %}
+    <h1>Create your first event type</h1>
+    {% if event %}
+      <div class="alert alert-success">You already have “{{ event.name }}”.</div>
+      <a class="btn btn-primary btn-block" href="/onboarding?step=done">Continue</a>
+      <p class="help" style="text-align:center">Or create another one below.</p>
+    {% endif %}
+    <form method="post" action="/onboarding">{{ csrf_input(request) }}<input type="hidden" name="step" value="event">
+      <div class="field"><label for="ename">Name</label><input id="ename" name="name" value="{{ '30 minute meeting' if not event else '' }}" required></div>
+      <div class="grid grid-2">
+        <div class="field"><label for="duration">Duration</label><select id="duration" name="duration">{% for d in [15, 30, 45, 60] %}<option value="{{ d }}" {{ 'selected' if d == 30 }}>{{ d }} min</option>{% endfor %}</select></div>
+        <div class="field"><label for="location">Location</label><select id="location" name="location">
+          <option value="google_meet">Google Meet</option><option value="zoom">Zoom</option><option value="teams">Microsoft Teams</option>
+          <option value="phone">Phone call</option><option value="in_person">In person</option><option value="host_provides">I'll provide details</option></select></div>
+      </div>
+      <div class="field"><label for="location_value">Location details <span class="muted">(address, if in person)</span></label><input id="location_value" name="location_value"></div>
+      <button class="btn {{ 'btn' if event else 'btn-primary' }} btn-block">Create event type</button>
+    </form>
+
+  {% else %}
+    <h1>🎉 You're ready to take bookings</h1>
+    {% if not user.email_verified_at %}<div class="alert alert-warning">Verify your email ({{ user.email }}) to activate your link. Check your inbox.</div>{% endif %}
+    <p class="muted" style="text-align:center">Share this link anywhere — email signature, website, social.</p>
+    {% set link = event_url or profile_url %}
+    <div class="row" style="flex-wrap:nowrap"><input value="{{ link }}" readonly aria-label="Booking link"><button class="btn" data-copy="{{ link }}">Copy</button></div>
+    <div class="row mt" style="justify-content:center"><a class="btn" href="{{ link }}" target="_blank" rel="noopener">Preview booking page ↗</a></div>
+    <form method="post" action="/onboarding" class="mt">{{ csrf_input(request) }}<input type="hidden" name="step" value="done"><button class="btn btn-primary btn-block">Go to dashboard</button></form>
+  {% endif %}
+  </div>
+  {% if step != 'done' %}<p class="auth-alt"><a href="/onboarding?step={{ steps[idx + 1] }}">Skip this step</a></p>{% endif %}
+</div>
+{% endblock %}

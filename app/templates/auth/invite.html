@@ -1,0 +1,31 @@
+{% extends "public_base.html" %}
+{% block title %}Join {{ ws.name }} · {{ app_name }}{% endblock %}
+{% block head %}{% include "auth/_auth_head.html" %}{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <a class="brand" href="/"><span class="brand-mark">A</span> {{ app_name }}</a>
+  <div class="card auth-card">
+    <h1>Join {{ ws.name }}</h1>
+    <p class="muted" style="text-align:center">You've been invited as <strong>{{ member.role }}</strong>{% if email %} ({{ email }}){% endif %}.</p>
+    {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+    {% if current and (not email or current.email|lower == email) %}
+      <form method="post" action="/invite/{{ token }}">{{ csrf_input(request) }}
+        <p style="text-align:center">Signed in as {{ current.email }}.</p>
+        <button class="btn btn-primary btn-block">Accept invitation</button></form>
+    {% elif existing %}
+      <p style="text-align:center">An account already exists for {{ email }}.</p>
+      <a class="btn btn-primary btn-block" href="/login?next=/invite/{{ token }}">Log in to accept</a>
+      {% if current %}<p class="help" style="text-align:center">You're currently signed in as {{ current.email }}.</p>{% endif %}
+    {% else %}
+      <form method="post" action="/invite/{{ token }}">{{ csrf_input(request) }}
+        <div class="field"><label for="name">Full name</label><input id="name" name="name" required autocomplete="name"></div>
+        <div class="field"><label for="inv-email">Email</label><input type="email" id="inv-email" value="{{ email }}" disabled></div>
+        <div class="field"><label for="password">Create a password</label><input type="password" id="password" name="password" minlength="8" required autocomplete="new-password"></div>
+        <input type="hidden" name="timezone" id="timezone" value="UTC">
+        <button class="btn btn-primary btn-block">Create account &amp; join</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script>try { const el = document.getElementById('timezone'); if (el) el.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) {}</script>{% endblock %}

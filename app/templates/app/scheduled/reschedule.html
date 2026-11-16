@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Reschedule{% endblock %}
+{% block content %}
+{% set inv = b.invitees[0] if b.invitees else None %}
+<div class="page-head">
+  <div><a href="/app/scheduled/{{ b.id }}" class="muted">← Back to meeting</a>
+    <h1 style="margin-top:6px">Reschedule {{ ev.name if ev else 'meeting' }}{% if inv %} with {{ inv.name }}{% endif %}</h1>
+    <p class="muted" style="margin:0">Currently {{ b.start_at|dt(tz) }}. Times below are in {{ tz }}.</p></div>
+</div>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+<form method="post" action="/app/scheduled/{{ b.id }}/reschedule" class="card">{{ csrf_input(request) }}
+  <div class="spread" style="margin-bottom:12px">
+    <strong>Week of {{ start.strftime('%d %b %Y') }}</strong>
+    <div class="row">
+      {% if prev %}<a class="btn btn-sm" href="?date={{ prev.isoformat() }}">← Previous</a>{% endif %}
+      <a class="btn btn-sm" href="?date={{ next.isoformat() }}">Next →</a>
+    </div>
+  </div>
+  {% if days %}
+  <div class="grid grid-4">
+    {% for day, slots in days.items() %}
+    <fieldset style="border:0;padding:0;margin:0"><legend style="font-weight:700;margin-bottom:6px">{{ day }}</legend>
+      <div class="stack" style="max-height:300px;overflow-y:auto">
+      {% for iso, label in slots %}
+        <label class="check" style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px"><input type="radio" name="start" value="{{ iso }}" required> {{ label }}</label>
+      {% endfor %}</div>
+    </fieldset>
+    {% endfor %}
+  </div>
+  {% else %}<div class="empty">No available times this week. Try the next week.</div>{% endif %}
+  <div class="field mt"><label for="reason">Reason <span class="muted">(shared with invitee)</span></label><input id="reason" name="reason"></div>
+  <button class="btn btn-primary" {{ 'disabled' if not days }}>Confirm new time</button>
+  <p class="help">The original booking stays in place until the new time is confirmed.</p>
+</form>
+{% endblock %}

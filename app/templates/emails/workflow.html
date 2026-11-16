@@ -1,0 +1,5 @@
+{% extends "emails/base.html" %}
+{% block body %}
+<div style="font-size:15px;line-height:1.6;">{{ body_html|safe }}</div>
+{% endblock %}
+{% block footer %}{% if links %}<a href="{{ links.reschedule_url }}" style="color:#5b6380;">Reschedule</a> · <a href="{{ links.cancel_url }}" style="color:#5b6380;">Cancel</a> · {% endif %}Sent by {{ app_name }}{% endblock %}

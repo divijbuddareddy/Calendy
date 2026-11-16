@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Embed{% endblock %}
+{% block head %}<script src="/embed.js" async></script>{% endblock %}
+{% block content %}
+{% include "app/integrations/_tabs.html" %}
+
+<div class="grid grid-2">
+  <section class="card" aria-labelledby="gen-h">
+    <h2 id="gen-h">Snippet generator</h2>
+    <form id="gen" onsubmit="return false">
+      <div class="field"><label for="g-url">Page to embed</label>
+        <select id="g-url">{% for o in options %}<option value="{{ o.url }}" {{ 'selected' if o.url == selected }}>{{ o.label }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="g-type">Embed type</label>
+        <select id="g-type"><option value="inline">Inline embed</option><option value="widget">Popup widget (floating button)</option><option value="text">Popup text link</option></select></div>
+      <div class="inline-fields">
+        <div class="field"><label for="g-primary">Primary colour</label><input id="g-primary" type="color" value="{{ primary }}"></div>
+        <div class="field"><label for="g-bg">Background</label><input id="g-bg" type="color" value="#ffffff"></div>
+        <div class="field"><label for="g-text">Text</label><input id="g-text" type="color" value="#1a1f36"></div>
+        <div class="field"><label for="g-radius">Radius (px)</label><input id="g-radius" type="number" min="0" max="40" value="12"></div>
+      </div>
+      <div class="inline-fields">
+        <div class="field"><label for="g-btn">Button / link text</label><input id="g-btn" type="text" value="Schedule time with me"></div>
+        <div class="field"><label for="g-name">Prefill name</label><input id="g-name" type="text" placeholder="optional"></div>
+        <div class="field"><label for="g-email">Prefill email</label><input id="g-email" type="email" placeholder="optional"></div>
+      </div>
+      <div class="inline-fields">
+        <div class="field"><label for="g-utm">utm_source</label><input id="g-utm" type="text" placeholder="e.g. website"></div>
+        <div class="field"><label for="g-camp">utm_campaign</label><input id="g-camp" type="text" placeholder="optional"></div>
+      </div>
+      <label class="check"><input id="g-hide" type="checkbox"> Hide host details/photo</label>
+      {% if can_hide_branding %}<label class="check"><input id="g-brand" type="checkbox"> Hide “Scheduling by {{ app_name }}”</label>{% endif %}
+    </form>
+    <div class="spread mt"><strong>Embed code</strong><button class="btn btn-sm" id="copy-snippet" type="button">Copy code</button></div>
+    <pre id="snippet" aria-live="polite" style="max-height:260px;overflow:auto"></pre>
+    <p class="help">Paste before <code>&lt;/body&gt;</code>. The script loads asynchronously and never blocks your page. Listen for <code>aal:event_scheduled</code> and <code>aal:popup_closed</code> events on <code>window</code>.</p>
+  </section>
+
+  <section class="card" aria-labelledby="live-h">
+    <h2 id="live-h">Live preview</h2>
+    <p class="muted">Popup types: try the buttons below. Events received from the embed appear in the log.</p>
+    <div class="row">
+      <button class="btn btn-primary" type="button" id="open-popup">Open popup</button>
+      <button class="btn" type="button" id="show-widget">Show floating button</button>
+      <a href="{{ selected }}" data-aal-popup id="text-link">Popup text link →</a>
+    </div>
+    <h3 class="mt">Event log</h3>
+    <pre id="event-log" style="min-height:80px;max-height:180px;overflow:auto">Waiting for events…</pre>
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head"><h2 style="margin:0">Inline embed</h2><span class="muted" style="font-size:.85rem">resizes automatically</span></div>
+  <div id="inline-demo" class="aal-inline-widget" data-url="{{ selected }}" data-min-height="640" style="border:1px dashed var(--border);border-radius:12px;overflow:hidden"></div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var ORIGIN = {{ origin|tojson }};
+  function opts(){
+    return {
+      url: $('g-url').value,
+      prefill: { name: $('g-name').value || undefined, email: $('g-email').value || undefined },
+      utm: { utm_source: $('g-utm').value || undefined, utm_campaign: $('g-camp').value || undefined },
+      theme: { primary_color: $('g-primary').value, background_color: $('g-bg').value, text_color: $('g-text').value,
+               border_radius: parseInt($('g-radius').value || '0', 10), hide_details: $('g-hide').checked,
+               hide_branding: $('g-brand') ? $('g-brand').checked : false },
+      text: $('g-btn').value, color: $('g-primary').value, textColor: '#ffffff'
+    };
+  }
+  function clean(o){ var r={}; for (var k in o){ var v=o[k]; if (v && typeof v==='object'){ v=clean(v); if(!Object.keys(v).length) continue; }
+    if (v===undefined||v===''||v===false) continue; r[k]=v; } return r; }
+  function snippet(){
+    var o=opts(), type=$('g-type').value, js=ORIGIN+'/embed.js', s;
+    var common = clean({url:o.url, prefill:o.prefill, utm:o.utm, theme:o.theme});
+    if (type==='inline') {
+      s = '<!-- AAL Scheduler inline embed -->\n<div id="aal-inline" style="min-width:320px;height:700px;"></div>\n' +
+          '<script src="'+js+'" async><\/script>\n<script>\n  window.AALQueue = window.AALQueue || [];\n  AALQueue.push(function (AAL) {\n    AAL.initInlineWidget(' +
+          JSON.stringify(Object.assign({}, common, {parentElement: '#aal-inline'}), null, 2).replace(/\n/g, '\n    ') + ');\n  });\n<\/script>';
+    } else if (type==='widget') {
+      s = '<!-- AAL Scheduler popup widget -->\n<script src="'+js+'" async><\/script>\n<script>\n  window.AALQueue = window.AALQueue || [];\n  AALQueue.push(function (AAL) {\n    AAL.initPopupWidget(' +
+          JSON.stringify(Object.assign({}, common, {text:o.text, color:o.color, textColor:o.textColor}), null, 2).replace(/\n/g, '\n    ') + ');\n  });\n<\/script>';
+    } else {
+      s = '<!-- AAL Scheduler popup text -->\n<script src="'+js+'" async><\/script>\n<a href="#" onclick="AAL.initPopupText(' +
+          JSON.stringify(common).replace(/"/g, '&quot;') + ');return false;">'+(o.text||'Schedule time with me')+'</a>';
+    }
+    $('snippet').textContent = s;
+  }
+  ['g-url','g-type','g-primary','g-bg','g-text','g-radius','g-btn','g-name','g-email','g-utm','g-camp','g-hide','g-brand'].forEach(function(id){
+    var el=$(id); if(el){ el.addEventListener('input', snippet); el.addEventListener('change', snippet); }
+  });
+  $('g-url').addEventListener('change', function(){ $('text-link').href=this.value; });
+  $('copy-snippet').addEventListener('click', function(){ navigator.clipboard.writeText($('snippet').textContent).then(function(){ toast('Embed code copied'); }); });
+  snippet();
+  function log(name, detail){ var l=$('event-log'); if(l.textContent.indexOf('Waiting')===0) l.textContent='';
+    l.textContent = new Date().toLocaleTimeString()+'  '+name+'  '+JSON.stringify(detail||{})+'\n'+l.textContent; }
+  window.addEventListener('aal:event_scheduled', function(e){ log('aal:event_scheduled', e.detail); });
+  window.addEventListener('aal:popup_closed', function(e){ log('aal:popup_closed', e.detail); });
+  function whenReady(fn){ if (window.AAL) fn(window.AAL); else setTimeout(function(){ whenReady(fn); }, 50); }
+  $('open-popup').addEventListener('click', function(){ whenReady(function(A){ A.initPopupText(clean(opts())); }); });
+  $('show-widget').addEventListener('click', function(){ whenReady(function(A){ A.initPopupWidget(clean(opts())); toast('Floating button added (bottom right)'); }); });
+  $('g-url').addEventListener('change', function(){ whenReady(function(A){ var p=$('inline-demo'); p.__aalInit=null; A.initInlineWidget(Object.assign(clean(opts()), {parentElement: p, minHeight: 640})); }); });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}{{ team.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="row">
+    {% if team.logo_url %}<img src="{{ team.logo_url }}" alt="{{ team.name }} logo" class="avatar">{% endif %}
+    <div>
+      <p class="muted" style="margin:0"><a href="/app/teams?tab=teams">← Teams</a></p>
+      <h1>{{ team.name }}</h1>
+      {% if team.description %}<p class="muted">{{ team.description }}</p>{% endif %}
+    </div>
+  </div>
+  <div class="row">
+    <a class="btn" href="/team/{{ team.slug }}" target="_blank" rel="noopener">View team page ↗</a>
+    <button class="btn" type="button" data-copy="{{ public_url }}">Copy link</button>
+    {% if can_manage %}<a class="btn btn-primary" href="/app/event-types/new?team_id={{ team.id }}&kind=round_robin">+ Team event type</a>{% endif %}
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <section class="card">
+    <div class="card-head"><h2>Members</h2><span class="muted">{{ tms|length }}</span></div>
+    {% if tms %}
+    <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Member</th><th>Team role</th><th>Priority</th><th>Active</th><th><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>
+      {% for tm in tms %}{% set u = users.get(tm.user_id) %}
+      <tr>
+        {% if can_manage %}
+        <td><strong>{{ u.name if u else tm.user_id }}</strong><br><span class="muted">{{ u.email if u }}</span></td>
+        <td colspan="3">
+          <form method="post" action="/app/teams/{{ team.id }}/members/{{ tm.id }}/update" class="row" style="margin:0" id="tmf-{{ tm.id }}">
+            {{ csrf_input(request) }}
+            <label class="sr-only" for="tr-{{ tm.id }}">Team role</label>
+            <select id="tr-{{ tm.id }}" name="role" style="width:auto">
+              {% for r in team_roles %}<option value="{{ r }}" {{ 'selected' if r == tm.role }}>{{ r|capitalize }}</option>{% endfor %}
+            </select>
+            <label class="sr-only" for="tp-{{ tm.id }}">Priority</label>
+            <input id="tp-{{ tm.id }}" type="number" name="priority" min="0" max="10" value="{{ tm.priority }}" style="width:70px">
+            <label class="check" style="margin:0"><input type="checkbox" name="active" value="1" {{ 'checked' if tm.active }}> Active</label>
+            <button class="btn btn-sm" type="submit">Save</button>
+          </form>
+        </td>
+        <td>
+          <form method="post" action="/app/teams/{{ team.id }}/members/{{ tm.id }}/remove" style="margin:0">{{ csrf_input(request) }}
+            <button class="btn btn-sm btn-danger" type="submit" data-confirm="Remove from team?">Remove</button></form>
+        </td>
+        {% else %}
+        <td><strong>{{ u.name if u else tm.user_id }}</strong><br><span class="muted">{{ u.email if u }}</span></td>
+        <td>{{ tm.role|capitalize }}</td><td>{{ tm.priority }}</td>
+        <td>{% if tm.active %}<span class="badge badge-success">Active</span>{% else %}<span class="badge">Inactive</span>{% endif %}</td><td></td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <p class="help">Priority (0–10) is used by round-robin “maximise availability” — higher is preferred. Inactive members are skipped for assignment.</p>
+    {% else %}<div class="empty">No members yet.</div>{% endif %}
+
+    {% if can_manage %}
+    <form method="post" action="/app/teams/{{ team.id }}/members/add" class="mt">
+      {{ csrf_input(request) }}
+      <h3>Add a member</h3>
+      {% if candidates %}
+      <div class="inline-fields">
+        <div style="flex:2"><label for="add-user">Workspace member</label>
+          <select id="add-user" name="user_id">{% for m, u in candidates %}<option value="{{ u.id }}">{{ u.name }} ({{ u.email }})</option>{% endfor %}</select></div>
+        <div><label for="add-role">Team role</label>
+          <select id="add-role" name="role">{% for r in team_roles %}<option value="{{ r }}" {{ 'selected' if r == 'member' }}>{{ r|capitalize }}</option>{% endfor %}</select></div>
+        <div><label for="add-pri">Priority</label><input id="add-pri" type="number" name="priority" min="0" max="10" value="1"></div>
+        <div style="flex:0;align-self:flex-end"><button class="btn btn-primary" type="submit">Add</button></div>
+      </div>
+      {% else %}<p class="muted">Everyone in the workspace is already on this team. <a href="/app/teams">Invite more people</a>.</p>{% endif %}
+    </form>
+    {% endif %}
+  </section>
+
+  <div>
+    <section class="card">
+      <div class="card-head"><h2>Team event types</h2>
+        {% if can_manage %}<a class="btn btn-sm" href="/app/event-types/new?team_id={{ team.id }}">+ New</a>{% endif %}</div>
+      {% if events %}
+      <div class="stack">
+        {% for e in events %}
+        <div class="spread">
+          <div class="row"><span class="color-dot" style="background:{{ e.color }}" aria-hidden="true"></span>
+            <div><a href="/app/event-types/{{ e.id }}/edit"><strong>{{ e.name }}</strong></a><br>
+              <span class="muted">{{ e.duration }} min · {{ e.kind|replace('_',' ') }} · {{ e.status }}</span></div></div>
+          <button class="btn btn-sm" type="button" data-copy="{{ base_url }}/team/{{ team.slug }}/{{ e.slug }}">Copy link</button>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}<div class="empty">No team event types yet. Create a round-robin or collective event for this team.</div>{% endif %}
+    </section>
+
+    {% if can_manage %}
+    <form class="card" method="post" action="/app/teams/{{ team.id }}/edit">
+      {{ csrf_input(request) }}
+      <h2>Team settings</h2>
+      <div class="field"><label for="e-name">Name</label><input id="e-name" type="text" name="name" value="{{ team.name }}" required></div>
+      <div class="field"><label for="e-slug">Team link</label><input id="e-slug" type="text" name="slug" value="{{ team.slug }}" pattern="[a-zA-Z0-9-]*">
+        <p class="help">{{ base_url }}/team/{{ team.slug }}</p></div>
+      <div class="field"><label for="e-desc">Description</label><textarea id="e-desc" name="description" rows="2">{{ team.description or '' }}</textarea></div>
+      <div class="field"><label for="e-logo">Logo URL</label><input id="e-logo" type="url" name="logo_url" value="{{ team.logo_url or '' }}"></div>
+      <button class="btn btn-primary" type="submit">Save team</button>
+    </form>
+    {% if ctx.can('admin') %}
+    <form class="card" method="post" action="/app/teams/{{ team.id }}/delete">
+      {{ csrf_input(request) }}
+      <h2>Delete team</h2>
+      <p class="muted">Team event types must be moved or deleted first.</p>
+      <button class="btn btn-danger" type="submit" data-confirm="Delete this team?">Delete team</button>
+    </form>
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

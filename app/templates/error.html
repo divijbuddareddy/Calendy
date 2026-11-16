@@ -1,0 +1,11 @@
+{% extends "public_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="public-wrap" style="max-width:560px">
+  <div class="card" style="text-align:center;padding:40px">
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ message }}</p>
+    <a class="btn btn-primary" href="/">Go home</a>
+  </div>
+</div>
+{% endblock %}

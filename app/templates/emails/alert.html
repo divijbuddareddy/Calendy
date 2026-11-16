@@ -1,0 +1,7 @@
+{% extends "emails/base.html" %}
+{% block body %}
+<h1 style="font-size:19px;margin:0 0 10px;">{{ title }}</h1>
+{% if recipient_name %}<p>Hi {{ recipient_name }},</p>{% endif %}
+<p>{% for line in (message or '').split('\n') %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+{% if link %}<p><a href="{{ link if link.startswith('http') else base_url ~ link }}" style="display:inline-block;padding:9px 14px;background:#3b47d6;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">{{ link_label or ('Open ' ~ app_name) }}</a></p>{% endif %}
+{% endblock %}

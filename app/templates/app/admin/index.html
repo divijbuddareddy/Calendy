@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block content %}
+{% include "app/admin/_tabs.html" %}
+<div class="grid grid-2">
+  <form class="card" method="post" action="/app/admin/security">
+    {{ csrf_input(request) }}
+    <h2>Security policies</h2>
+    <div class="field">
+      <label for="approved_domains">Approved email domains</label>
+      <input id="approved_domains" type="text" name="approved_domains" value="{{ approved_domains }}" placeholder="acme.com, acme.co.uk" {{ 'disabled' if not has_feature(workspace, 'domain_control') }}>
+      <p class="help">{% if has_feature(workspace, 'domain_control') %}Only addresses on these domains can be invited or provisioned. Leave empty to allow any domain.{% else %}Domain control is available on the Enterprise plan.{% endif %}</p>
+    </div>
+    <div class="field">
+      <label for="retention_days">Data retention (days)</label>
+      <input id="retention_days" type="number" min="30" max="3650" name="retention_days" value="{{ retention_days }}">
+      <p class="help">How long booking and analytics data is kept. Analytics needs at least 365 days for year-over-year reporting.</p>
+    </div>
+    <fieldset class="field" style="border:0;padding:0;margin:0 0 14px">
+      <legend style="font-weight:600;font-size:.88rem;margin-bottom:4px">Notification quiet hours</legend>
+      <div class="inline-fields">
+        <div><label for="quiet_start">Start</label><input id="quiet_start" type="time" name="quiet_start" value="{{ quiet_start }}"></div>
+        <div><label for="quiet_end">End</label><input id="quiet_end" type="time" name="quiet_end" value="{{ quiet_end }}"></div>
+      </div>
+      <input type="hidden" name="quiet_tz" value="{{ user.default_timezone }}">
+      <p class="help">Non-urgent host notifications are deferred during this window ({{ user.default_timezone }}). Leave both empty to disable.</p>
+    </fieldset>
+    <fieldset class="field" style="border:0;padding:0;margin:0 0 14px">
+      <legend style="font-weight:600;font-size:.88rem;margin-bottom:4px">Custom security policies</legend>
+      <input type="hidden" name="policy_present" value="1">
+      <label for="session_max_age_minutes">Session max age (minutes)</label>
+      <input id="session_max_age_minutes" type="number" min="5" max="129600" name="session_max_age_minutes" value="{{ policy.session_max_age_minutes or '' }}" placeholder="Platform default">
+      <p class="help">Members are signed out this long after signing in, regardless of activity.</p>
+      <p style="margin:8px 0 4px"><strong>Allowed sign-in methods</strong></p>
+      {% for m in login_methods %}
+      <label class="check"><input type="checkbox" name="method_{{ m }}" value="1" {{ 'checked' if m in (policy.allowed_login_methods or login_methods) }}> {{ {'password':'Email & password','google':'Google sign-in','sso':'SAML SSO'}[m] }}</label>
+      {% endfor %}
+      <label class="check"><input type="checkbox" name="require_sso" value="1" {{ 'checked' if policy.require_sso }} {{ 'disabled' if not sso_active }}> Require SSO for users on verified domains</label>
+      <label class="check"><input type="checkbox" name="jit_provisioning" value="1" {{ 'checked' if policy.jit_provisioning }}> Just-in-time provision new members on first SSO sign-in</label>
+      <p class="help">Login-method policies apply to email addresses on your verified domains.</p>
+    </fieldset>
+    <button class="btn btn-primary" type="submit">Save security settings</button>
+  </form>
+
+  <div>
+    <section class="card">
+      <h2>Single sign-on</h2>
+      {% if sso_active %}<p><span class="badge badge-success">Active{{ ' · enforced' if sso.enforce_sso or policy.require_sso }}</span></p>
+      {% elif sso and sso.enabled %}<p><span class="badge badge-warning">Configured · plan does not include SSO</span></p>
+      {% elif sso and sso.idp_entity_id %}<p><span class="badge">Draft configuration</span></p>
+      {% else %}<p class="muted">SAML SSO is not configured.</p>{% endif %}
+      <a class="btn btn-sm" href="/app/admin/sso">Manage SSO &amp; SCIM</a>
+    </section>
+    <section class="card">
+      <h2>Managed event templates</h2>
+      <p class="muted">Create locked templates and assign them to members.</p>
+      <a class="btn btn-sm" href="/app/admin/managed-events">Open managed events</a>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>Recent activity</h2><a class="btn btn-sm btn-ghost" href="/app/admin/audit">View all</a></div>
+      {% if recent %}
+      <ul class="stack" style="list-style:none;padding:0;margin:0">
+        {% for r in recent %}<li><strong>{{ r.action }}</strong><br><small>{{ actors.get(r.actor_id, r.actor_id or 'system') }} · {{ r.created_at | dt(user.default_timezone) }}</small></li>{% endfor %}
+      </ul>
+      {% else %}<p class="empty">No audited actions yet.</p>{% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

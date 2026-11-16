@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+.dist/
+build/
+dist/
+
+# Local data & secrets
+scheduler.db
+scheduler.db-shm
+scheduler.db-wal
+scheduler.db*
+*.sqlite
+*.sqlite3
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Packaged browser extension builds
+extension/*.zip
+
+# Source documents
+*.pdf

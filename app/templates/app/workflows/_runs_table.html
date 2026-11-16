@@ -1,0 +1,20 @@
+<div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Scheduled</th><th>Recipient</th><th>Trigger</th><th>Status</th><th>Provider id / error</th><th>Tries</th><th></th></tr></thead>
+    <tbody>
+    {% for j in runs %}
+      <tr>
+        <td>{{ j.scheduled_at|dt(user.default_timezone) }}{% if j.sent_at %}<div class="muted" style="font-size:.75rem">sent {{ j.sent_at|dt(user.default_timezone, "%d %b %H:%M") }}</div>{% endif %}</td>
+        <td>{{ j.recipient }}<div class="muted" style="font-size:.75rem">{{ j.channel|upper }}{% if j.subject %} · {{ j.subject[:60] }}{% endif %}</div></td>
+        <td><code>{{ j.trigger }}</code>{% if wf_names is defined and j.workflow_id in wf_names %}<div class="muted" style="font-size:.75rem">{{ wf_names[j.workflow_id] }}</div>{% endif %}{% if j.booking_id %}<div><a href="/app/scheduled/{{ j.booking_id }}" style="font-size:.75rem">booking</a></div>{% endif %}</td>
+        <td><span class="badge {{ {'sent':'badge-success','failed':'badge-danger','scheduled':'badge-primary','cancelled':'','skipped':'badge-warning'}.get(j.status, '') }}">{{ j.status }}</span></td>
+        <td style="max-width:240px;word-break:break-all;font-size:.8rem">{% if j.provider_id %}<code>{{ j.provider_id }}</code>{% endif %}{% if j.error %}<div class="muted">{{ j.error[:200] }}</div>{% endif %}</td>
+        <td>{{ j.attempts }}</td>
+        <td>{% if j.status in ('failed', 'skipped') or (j.status == 'scheduled' and j.attempts) %}<form method="post" action="/app/workflows/jobs/{{ j.id }}/retry">{{ csrf_input(request) }}<button class="btn btn-sm" type="submit">Retry</button></form>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="empty">No runs yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>

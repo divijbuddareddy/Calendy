@@ -1,0 +1,7 @@
+{% extends "emails/base.html" %}
+{% block body %}
+<h1 style="font-size:20px;margin:0 0 8px;">A spot just opened up</h1>
+<p>Hi {{ name }}, a seat is now available for <strong>{{ event_name }}</strong>{% if host %} with {{ host.name }}{% endif %} on {{ when }}.</p>
+<p>Spots are first come, first served.</p>
+{% if url %}<p><a href="{{ url }}" style="display:inline-block;padding:9px 14px;background:#3b47d6;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">Book your spot</a></p>{% endif %}
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "public_base.html" %}
+{% block title %}Authorize {{ app.name }}{% endblock %}
+{% block content %}
+<div class="public-wrap" style="max-width:560px">
+  <div class="card" style="padding:32px">
+    <h1 style="margin-top:0">Authorize {{ app.name }}</h1>
+    <p class="muted"><strong>{{ app.name }}</strong>{% if app.homepage_url %} (<a href="{{ app.homepage_url }}" rel="noopener noreferrer" target="_blank">{{ app.homepage_url }}</a>){% endif %} wants to access your {{ app_name }} account <strong>{{ user.email }}</strong>.</p>
+    <form method="post" action="/oauth/authorize">
+      {{ csrf_input(request) }}
+      {% for k, v in params.items() %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+      <h2 style="font-size:1rem">This app will be able to:</h2>
+      <ul>
+        {% for s in scopes %}<li><strong>{{ s }}</strong> – {{ scope_labels[s] }}</li>{% endfor %}
+      </ul>
+      {% if workspaces|length > 1 %}
+      <div class="field"><label for="workspace_id">Workspace</label>
+        <select id="workspace_id" name="workspace_id">
+          {% for w in workspaces %}<option value="{{ w.id }}" {{ 'selected' if w.id == workspace.id }}>{{ w.name }}</option>{% endfor %}
+        </select></div>
+      {% else %}
+      <input type="hidden" name="workspace_id" value="{{ workspace.id }}">
+      <p class="muted">Workspace: <strong>{{ workspace.name }}</strong></p>
+      {% endif %}
+      <p class="help">You will be redirected to <code>{{ params.redirect_uri }}</code>. You can revoke access at any time under Integrations &gt; OAuth apps.</p>
+      <div class="row mt">
+        <button class="btn btn-primary" type="submit" name="decision" value="allow">Allow access</button>
+        <button class="btn" type="submit" name="decision" value="deny">Deny</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

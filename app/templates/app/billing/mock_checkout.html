@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Checkout{% endblock %}
+{% block content %}
+<div style="max-width:520px">
+  <div class="card">
+    <div class="spread"><strong>Subscription checkout</strong><span class="badge badge-warning">Test mode</span></div>
+    <p class="muted mt">Simulated Stripe Billing checkout (no STRIPE_SECRET_KEY configured). No card details are collected and no money moves.</p>
+    <div class="card mt" style="box-shadow:none">
+      <div class="spread"><span>{{ plan_info.label }} plan · {{ seats }} seat{{ 's' if seats != 1 }}</span><strong>{{ total|money('USD') }} / month</strong></div>
+      <div class="muted" style="font-size:.85rem">{{ plan_info.price_minor|money('USD') }} per seat per month, billed monthly.</div>
+    </div>
+    <form method="post" action="/app/billing/checkout/mock" class="mt stack">
+      {{ csrf_input(request) }}
+      <input type="hidden" name="session" value="{{ session }}">
+      <button class="btn btn-primary btn-block" name="outcome" value="success" type="submit">Subscribe – {{ total|money('USD') }} / month</button>
+      <button class="btn btn-ghost btn-sm" name="outcome" value="cancel" type="submit">Cancel</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

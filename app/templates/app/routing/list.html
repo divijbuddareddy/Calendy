@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Routing forms{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Routing forms</h1>
+    <p class="muted">Qualify visitors with a few questions, then send them to the right event type, teammate, page or message.</p>
+  </div>
+</div>
+<div class="grid grid-3" style="grid-template-columns:2fr 1fr">
+  <section class="card">
+    {% if forms %}
+    <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Form</th><th>Status</th><th>Submissions</th><th>Converted</th><th><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>
+      {% for f in forms %}
+        <tr>
+          <td><a href="/app/routing/{{ f.id }}"><strong>{{ f.name }}</strong></a><br><span class="muted">/r/{{ workspace.slug }}/{{ f.slug }}</span></td>
+          <td>{% if f.status == 'active' %}<span class="badge badge-success">Active</span>{% else %}<span class="badge">Paused</span>{% endif %}</td>
+          <td><a href="/app/routing/{{ f.id }}/submissions">{{ subs.get(f.id, 0) }}</a></td>
+          <td>{% set s = subs.get(f.id, 0) %}{{ conv.get(f.id, 0) }}{% if s %} <span class="muted">({{ (100 * conv.get(f.id, 0) / s)|round|int }}%)</span>{% endif %}</td>
+          <td style="text-align:right"><div class="row" style="justify-content:flex-end">
+            <a class="btn btn-sm" href="/app/routing/{{ f.id }}/preview">Test</a>
+            <button class="btn btn-sm" type="button" data-copy="{{ base_url }}/r/{{ workspace.slug }}/{{ f.slug }}">Copy link</button></div></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+      <div class="empty"><p><strong>No routing forms yet.</strong></p><p>Create one to route leads by company size, region, product interest and more.</p></div>
+    {% endif %}
+  </section>
+  {% if ctx.role != 'viewer' %}
+  <form class="card" method="post" action="/app/routing">
+    {{ csrf_input(request) }}
+    <h2>New routing form</h2>
+    <div class="field"><label for="rf-name">Name</label><input id="rf-name" type="text" name="name" required placeholder="Contact sales"></div>
+    <div class="field"><label for="rf-slug">Link</label><input id="rf-slug" type="text" name="slug" placeholder="contact-sales" pattern="[a-zA-Z0-9-]*">
+      <p class="help">{{ base_url }}/r/{{ workspace.slug }}/<em>link</em></p></div>
+    <button class="btn btn-primary" type="submit">Create form</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

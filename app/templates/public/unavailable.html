@@ -1,0 +1,13 @@
+{% extends "public_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block head %}{% include "public/_styles.html" %}{% endblock %}
+{% block content %}
+<div class="public-wrap narrow">
+  <div class="card" style="text-align:center;padding:40px">
+    <div class="status-hero"><div class="icon" aria-hidden="true">🗓️</div></div>
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ message }}</p>
+    {% if back_url %}<a class="btn" href="{{ back_url }}">{{ t('common.go_back') }}</a>{% endif %}
+  </div>
+</div>
+{% endblock %}

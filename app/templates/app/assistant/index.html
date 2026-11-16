@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}AI assistant{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>AI scheduling assistant</h1>
+    <p class="muted">Ask in plain English. The assistant only uses your availability and your workspace contacts, and nothing is sent or booked until you approve it.</p>
+  </div>
+  <span class="badge {{ 'badge-success' if llm_enabled else '' }}">{{ 'Language model + rules' if llm_enabled else 'Rules-based parser' }}</span>
+</div>
+
+<div class="card">
+  <form method="post" action="/app/assistant">
+    {{ csrf_input(request) }}
+    <div class="field">
+      <label for="prompt">What do you need?</label>
+      <textarea id="prompt" name="prompt" rows="3" required maxlength="1000" placeholder="Find 30 minutes next Tuesday with Sarah"></textarea>
+    </div>
+    <div class="spread">
+      <div class="row">
+        {% for ex in examples %}<button type="button" class="btn btn-sm btn-ghost" data-example>{{ ex }}</button>{% endfor %}
+      </div>
+      <button class="btn btn-primary" type="submit">Ask assistant</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Schedule from email</h2></div>
+  <p class="muted">Paste an inbound email thread (with its From / To / Subject lines if you have them). The assistant extracts who wants to meet, for how long and when, finds free times in your availability and drafts a reply. Nothing is sent until you approve it.</p>
+  <form method="post" action="/app/assistant/email">
+    {{ csrf_input(request) }}
+    <div class="field">
+      <label for="thread">Email thread</label>
+      <textarea id="thread" name="thread" rows="7" required maxlength="20000" placeholder="From: Sarah Connor &lt;sarah@acme.com&gt;&#10;To: you@example.com&#10;Subject: Quick sync about the pilot&#10;&#10;Hi! Could we find 30 minutes next Tuesday afternoon to discuss the pilot?&#10;&#10;Thanks,&#10;Sarah"></textarea>
+    </div>
+    <div class="row"><button class="btn btn-primary" type="submit">Find times &amp; draft reply</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Recent requests</h2></div>
+  {% if recent %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Request</th><th>Type</th><th>Status</th><th>When</th></tr></thead>
+    <tbody>
+    {% for r in recent %}
+      <tr>
+        <td><a href="/app/assistant/{{ r.id }}">{% if (r.parsed_json or {}).get('source') == 'email' %}Email: {{ r.parsed_json.email.subject or r.prompt[:80] }}{% else %}{{ r.prompt[:200] }}{% endif %}</a></td>
+        <td>{{ (r.parsed_json or {}).get('intent', '') }}</td>
+        <td><span class="badge {{ {'executed':'badge-success','rejected':'badge-danger','approved':'badge-primary'}.get(r.status, 'badge-warning') }}">{{ r.status }}</span></td>
+        <td class="muted">{{ r.created_at|dt(user.default_timezone) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<div class="empty">No requests yet. Try one of the examples above.</div>{% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('[data-example]').forEach(function (b) {
+  b.addEventListener('click', function () { var p = document.getElementById('prompt'); p.value = b.textContent; p.focus(); });
+});
+</script>
+{% endblock %}

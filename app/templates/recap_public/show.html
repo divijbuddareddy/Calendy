@@ -1,0 +1,32 @@
+{% extends "public_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="public-wrap" style="max-width:760px">
+  <div class="card">
+    <h1>{{ title }}</h1>
+    {% if locked %}
+      <p class="muted">This meeting recap is password protected.</p>
+      {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+      <form method="post" action="/recap/{{ token }}">
+        {{ csrf_input(request) }}
+        <div class="field"><label for="password">Password</label><input id="password" type="password" name="password" required autocomplete="current-password"></div>
+        <button class="btn btn-primary" type="submit">View recap</button>
+      </form>
+    {% else %}
+      <h2 class="mt">Summary</h2>
+      <p>{{ r.summary or 'No summary yet.' }}</p>
+      {% if r.decisions_json %}
+        <h2>Decisions</h2>
+        <ul>{% for d in r.decisions_json %}<li>{{ d }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if r.action_items_json %}
+        <h2>Action items</h2>
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th>Item</th><th>Owner</th><th>Due</th></tr></thead>
+          <tbody>{% for a in r.action_items_json %}<tr><td>{{ a.text }}</td><td>{{ a.owner or '—' }}</td><td>{{ a.due or '—' }}</td></tr>{% endfor %}</tbody>
+        </table></div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

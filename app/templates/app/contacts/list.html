@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Contacts{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Contacts</h1>
+    <p class="muted">Everyone who has booked with {{ workspace.name }} is added automatically and de-duplicated by email.</p>
+  </div>
+  <div class="row">
+    <a class="btn" href="/app/contacts/follow-ups">No-booking follow-ups</a>
+    <a class="btn" href="/app/contacts/insights">Insights</a>
+    <a class="btn" href="/app/contacts/crm">CRM</a>
+    <a class="btn" href="/app/contacts/export.csv?q={{ q|urlencode }}&tag={{ tag|urlencode }}">Export CSV</a>
+  </div>
+</div>
+
+<form class="card row" method="get" action="/app/contacts" role="search" style="margin-bottom:16px">
+  <label class="sr-only" for="c-q">Search contacts</label>
+  <input id="c-q" type="search" name="q" value="{{ q }}" placeholder="Search name, email, company or phone" style="flex:3">
+  <label class="sr-only" for="c-tag">Tag</label>
+  <select id="c-tag" name="tag" style="flex:1">
+    <option value="">All tags</option>
+    {% for t in tags %}<option value="{{ t }}" {{ 'selected' if t|lower == tag|lower }}>{{ t }}</option>{% endfor %}
+  </select>
+  <button class="btn btn-primary" type="submit">Search</button>
+  {% if q or tag %}<a class="btn btn-ghost" href="/app/contacts">Clear</a>{% endif %}
+</form>
+
+<div class="grid" style="grid-template-columns:minmax(0,3fr) minmax(0,1fr)">
+  <section class="card">
+    <div class="card-head"><h2>{{ total }} contact{{ 's' if total != 1 }}</h2></div>
+    {% if contacts %}
+    <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Name</th><th>Company</th><th>Tags</th><th>Added</th></tr></thead>
+      <tbody>
+      {% for c in contacts %}
+        <tr>
+          <td><a href="/app/contacts/{{ c.id }}"><strong>{{ c.name or c.email_normalized }}</strong></a><br><span class="muted">{{ c.email_normalized }}</span>
+            {% if c.unsubscribed %}<span class="badge badge-warning">Unsubscribed</span>{% endif %}</td>
+          <td>{{ c.company or '—' }}</td>
+          <td>{% for t in c.tags_json or [] %}<a class="badge" href="/app/contacts?tag={{ t|urlencode }}">{{ t }}</a> {% endfor %}</td>
+          <td class="muted" style="white-space:nowrap">{{ c.created_at|dt(user.default_timezone, '%d %b %Y') }}<br>{{ c.source }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% elif q or tag %}<div class="empty">No contacts match your search.</div>
+    {% else %}<div class="empty"><p><strong>No contacts yet.</strong></p><p>Contacts appear here automatically after someone books with you.</p></div>{% endif %}
+  </section>
+
+  {% if ctx.role != 'viewer' %}
+  <form class="card" method="post" action="/app/contacts">
+    {{ csrf_input(request) }}
+    <h2>Add contact</h2>
+    <div class="field"><label for="n-email">Email</label><input id="n-email" type="email" name="email" required></div>
+    <div class="field"><label for="n-name">Name</label><input id="n-name" type="text" name="name"></div>
+    <div class="field"><label for="n-company">Company</label><input id="n-company" type="text" name="company"></div>
+    <div class="field"><label for="n-phone">Phone</label><input id="n-phone" type="tel" name="phone"></div>
+    <div class="field"><label for="n-tags">Tags</label><input id="n-tags" type="text" name="tags" placeholder="lead, vip"></div>
+    <button class="btn btn-primary btn-block" type="submit">Add contact</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

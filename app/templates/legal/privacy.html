@@ -1,0 +1,55 @@
+{% extends "legal/_layout.html" %}
+{% block title %}Privacy notice · {{ app_name }}{% endblock %}
+{% block legal %}
+<h1>Privacy notice</h1>
+<p class="muted">Version {{ versions.privacy }} · Operated by {{ company }}</p>
+
+<p>{{ app_name }} is a scheduling service. This notice explains what personal data we process for <strong>hosts</strong>
+(people with an account who publish booking links) and <strong>invitees</strong> (people who book a meeting through a link,
+without an account), why we process it, how long we keep it and the choices you have.</p>
+
+<h2>Roles</h2>
+<p>For account and billing data we are the <em>controller</em>. For booking data that invitees submit to a host, the host's
+organisation is the controller and we act as its <em>processor</em>. Invitees should also read the host's own privacy terms.</p>
+
+<h2>Data we process</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Who</th><th>Data</th><th>Purpose</th><th>Legal basis</th></tr></thead>
+  <tbody>
+    <tr><td>Hosts</td><td>Name, email, password hash, profile photo URL, timezone, locale, working hours, workspace membership and role</td><td>Provide the account and booking pages</td><td>Contract</td></tr>
+    <tr><td>Hosts</td><td>Calendar connection tokens (encrypted), free/busy information, event titles needed for conflict checks</td><td>Prevent double-booking and write confirmed meetings to your calendar</td><td>Contract</td></tr>
+    <tr><td>Invitees</td><td>Name, email, optional phone, guests, answers to the host's questions, timezone, booking source/UTM parameters</td><td>Book, confirm, remind, reschedule and cancel the meeting</td><td>Host's legitimate interest or contract with the host</td></tr>
+    <tr><td>Invitees</td><td>Consent record: the privacy-notice version and the time you accepted it</td><td>Show what you agreed to</td><td>Legal obligation / legitimate interest</td></tr>
+    <tr><td>Everyone</td><td>IP address, request IDs, security and audit logs</td><td>Security, abuse and fraud prevention, rate limiting</td><td>Legitimate interest</td></tr>
+    <tr><td>Paid bookings</td><td>Payment status and provider references. Stripe or PayPal handle card details; we never store them</td><td>Take payments, refunds and reconciliation</td><td>Contract</td></tr>
+  </tbody>
+</table></div>
+
+<h2>Sub-processors</h2>
+<p>Depending on what the host enables: cloud hosting and managed database (for example Render), calendar providers (Google,
+Microsoft), video providers (Google Meet, Zoom, Microsoft Teams), payment providers (Stripe, PayPal), email and SMS delivery
+providers, and error monitoring. Data is shared only as needed for the feature the host turned on.</p>
+
+<h2>Cookies</h2>
+<p>We use one strictly necessary, HTTP-only session cookie for signed-in hosts, plus a CSRF token. A <code>lang</code> cookie may
+remember the language you picked on a booking page. We do not use advertising cookies.</p>
+
+<h2>Retention</h2>
+<p>See our <a href="/data-retention">data retention policy</a> (version {{ versions.retention }}) for how long each category is kept.</p>
+
+<h2>Your rights</h2>
+<p>You can access, correct, export or delete your data. Hosts can export their data and delete their account from
+<em>Settings → Data &amp; privacy</em>. Invitees can cancel bookings with the link in their confirmation email, and can ask the
+host, or us at <a href="mailto:{{ contact }}">{{ contact }}</a>, to access or erase their data. You can also complain to your
+local data-protection authority.</p>
+
+<h2>Security</h2>
+<p>Passwords are hashed with bcrypt. OAuth tokens and webhook secrets are encrypted at rest. Every database query is scoped
+to your workspace, traffic is encrypted in transit, and databases are backed up daily with point-in-time recovery.</p>
+
+<h2>International transfers</h2>
+<p>Where data leaves the UK or EEA we rely on adequacy decisions or standard contractual clauses with our providers.</p>
+
+<h2>Changes</h2>
+<p>When this notice changes materially we publish a new version here. We record which version each invitee accepted.</p>
+{% endblock %}
