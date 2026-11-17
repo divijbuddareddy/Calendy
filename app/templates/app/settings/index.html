@@ -89,6 +89,31 @@
 </div>
 {% endif %}
 
+{% elif tab == 'ai' %}
+<div class="card" style="max-width:640px">
+  <h2>AI (Anthropic Claude)</h2>
+  <p class="muted">The AI scheduling assistant and meeting recaps use Claude when an API key is set. Without one, built-in rules-based parsing is used, so everything still works.</p>
+  <p>Status:
+    {% if ai_key_source == 'workspace' %}<span class="badge badge-success">On · workspace key {{ ai_key_masked }}</span>
+    {% elif ai_key_source == 'server' %}<span class="badge badge-success">On · server key (ANTHROPIC_API_KEY)</span>
+    {% else %}<span class="badge badge-warning">Off · no API key</span>{% endif %}
+  </p>
+  {% if ctx.can('admin') %}
+  <form method="post" action="/app/settings/ai" autocomplete="off">{{ csrf_input(request) }}
+    <div class="field"><label for="api_key">{{ 'Replace API key' if ai_key_source == 'workspace' else 'Anthropic API key' }}</label>
+      <input type="password" id="api_key" name="api_key" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" required>
+      <div class="help">Create one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. It is checked with Anthropic, stored encrypted and never shown again in full.</div></div>
+    <button class="btn btn-primary">Save &amp; verify key</button>
+  </form>
+  {% if ai_key_source == 'workspace' %}
+  <form method="post" action="/app/settings/ai" class="mt">{{ csrf_input(request) }}<input type="hidden" name="action" value="remove">
+    <button class="btn btn-sm btn-danger" data-confirm="Remove the API key? AI features will fall back to the rules-based parser.">Remove key</button></form>
+  {% endif %}
+  {% else %}
+  <p class="muted">Only workspace admins can change the API key.</p>
+  {% endif %}
+</div>
+
 {% elif tab == 'billing' %}
 <div class="alert alert-info" role="status">Manage your subscription, seats, invoices and payment method on the <a href="/app/billing">Billing page</a>.</div>
 <div class="card">

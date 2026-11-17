@@ -13,6 +13,8 @@ from app.deps import Ctx, Forbidden, flash, redirect, render, require_feature
 from app.models import AssistantRequest
 from app.services import assistant as svc
 
+from app.services.ai_key import effective_key
+
 router = APIRouter()
 feature = require_feature("assistant")
 
@@ -47,7 +49,7 @@ def index(request: Request, ctx: Ctx = Depends(feature), db: Session = Depends(g
         .order_by(AssistantRequest.created_at.desc()).limit(20)
     ).all()
     return render(request, "app/assistant/index.html", ctx, nav="assistant", recent=recent, examples=EXAMPLES,
-                  llm_enabled=bool(svc.settings.anthropic_api_key))
+                  llm_enabled=bool(effective_key(db, ctx.workspace.id)))
 
 
 @router.post("/app/assistant")

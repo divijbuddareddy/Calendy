@@ -8,11 +8,19 @@ environment dictates otherwise" clause applies. The architecture follows PRD §1
 ## Run
 
 ```bash
-pip install -r requirements.txt
-python seed.py          # demo data: demo@example.com / demo1234 (also sam@ / priya@example.com)
-run.bat                 # or ./run.sh  ->  http://127.0.0.1:8000
-python -m pytest        # full suite on SQLite
+run.bat                 # Windows  (or ./run.sh on macOS/Linux)  ->  http://127.0.0.1:8000
 ```
+
+The run script creates `.venv`, installs `requirements.txt`, copies `.env.example` to `.env` if missing and
+starts the server. The demo workspace is seeded automatically: log in with **demo@example.com / demo1234**.
+Tests: `.venv\Scripts\python -m pytest` (or `.venv/bin/python -m pytest`).
+
+### Claude AI (Anthropic API key)
+
+Go to **Settings → AI**, paste your Anthropic API key (from console.anthropic.com) and click **Save & verify key**.
+The key is checked with Anthropic, stored encrypted per workspace, and turns on Claude for the AI scheduling
+assistant and meeting recaps. Only workspace owners and admins can change it. Without a key, the built-in
+rules-based parser is used. A server-wide `ANTHROPIC_API_KEY` in `.env` still works as a fallback.
 
 Everything works offline: calendar, Meet/Zoom/Teams, Stripe/PayPal and SMS have **real adapters**
 (enabled by filling `.env`, see `.env.example`) **and** built-in mock modes. All outgoing email/SMS is

@@ -40,12 +40,13 @@ from app.models import (
     utcnow,
 )
 from app.security import hash_password, verify_password
+from app.services import ai_key
 from app.services.bootstrap import slugify
 from app.services.hostutil import HHMM, all_timezones, valid_tz
 
 router = APIRouter()
 TABS = {"profile": "Profile", "branding": "Branding", "notifications": "Notifications", "security": "Security",
-        "workspace": "Workspace", "billing": "Billing", "data": "Data & privacy"}
+        "workspace": "Workspace", "ai": "AI", "billing": "Billing", "data": "Data & privacy"}
 # Languages for invitee-facing pages (booking, confirmation, manage/cancel); see app/i18n.py.
 LOCALES = {"en": "English", "en-GB": "English (UK)", "fr": "Français", "de": "Deutsch", "es": "Español",
            "hi": "हिन्दी"}
@@ -86,7 +87,42 @@ def settings_page(request: Request, tab: str = "profile", ctx: Ctx = Depends(get
                   plans=PLANS, plan=plan_of(ctx.workspace), data_requests=requests_,
                   db_backup_available=_backup_available() and ctx.role == "owner",
                   session_idle_days=max(1, app_settings.session_idle_minutes // 1440),
-                  session_max_days=max(1, app_settings.session_max_age_minutes // 1440))
+                  session_max_days=max(1, app_settings.session_max_age_minutes // 1440),
+                  ai_key_source=ai_key.key_source(ctx.workspace),
+                  ai_key_masked=ai_key.mask(ai_key.workspace_key(ctx.workspace)))
+
+
+@router.post("/app/settings/ai")
+async def save_ai_key(request: Request, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)):
+    if not ctx.can("admin"):
+        raise Forbidden("Only workspace admins can change the AI API key.")
+    form = await request.form()
+    back = "/app/assistant" if form.get("next") == "/app/assistant" else "/app/settings?tab=ai"
+    ws = db.get(Workspace, ctx.workspace.id)
+    if form.get("action") == "remove":
+        ai_key.set_workspace_key(ws, None)
+        audit(db, "workspace.ai_key_removed", workspace_id=ws.id, actor_id=ctx.user.id, entity_type="workspace",
+              entity_id=ws.id)
+        db.commit()
+        flash(request, "API key removed.")
+        return redirect(back)
+    key = (form.get("api_key") or "").strip()
+    if not key:
+        flash(request, "Paste your Anthropic API key first.", "error")
+        return redirect(back)
+    if len(key) > 300 or any(c.isspace() for c in key):
+        flash(request, "That doesn't look like an API key.", "error")
+        return redirect(back)
+    ok, message = ai_key.verify_key(key)
+    if not ok:
+        flash(request, message, "error")
+        return redirect(back)
+    ai_key.set_workspace_key(ws, key)
+    audit(db, "workspace.ai_key_set", workspace_id=ws.id, actor_id=ctx.user.id, entity_type="workspace",
+          entity_id=ws.id)
+    db.commit()
+    flash(request, message)
+    return redirect(back)
 
 
 @router.post("/app/settings/profile")

@@ -2,10 +2,12 @@
 .env as app.config, kept separate so config.py stays untouched)."""
 from functools import lru_cache
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
+
+from app.config import BlankAsDefaultSettings
 
 
-class ExtSettings(BaseSettings):
+class ExtSettings(BlankAsDefaultSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # PayPal webhook id (Developer dashboard > Webhooks) used by verify-webhook-signature

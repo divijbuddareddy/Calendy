@@ -179,17 +179,19 @@ def generate_recap(transcript: str, base_date: Optional[dt.date] = None) -> dict
     }
 
 
-def llm_recap(transcript: str, timeout: float = 20.0) -> Optional[dict]:
-    if not settings.anthropic_api_key:
+def llm_recap(transcript: str, timeout: float = 20.0, api_key: Optional[str] = None) -> Optional[dict]:
+    from app.services import ai_key
+
+    api_key = api_key if api_key is not None else settings.anthropic_api_key
+    if not api_key:
         return None
     try:
         import httpx
 
         r = httpx.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={"x-api-key": settings.anthropic_api_key, "anthropic-version": "2023-06-01",
-                     "content-type": "application/json"},
-            json={"model": "claude-sonnet-5-5", "max_tokens": 1200,
+            f"{ai_key.API_BASE}/messages",
+            headers=ai_key.headers(api_key),
+            json={"model": ai_key.MODEL, "max_tokens": 1200,
                   "system": "Summarise the meeting transcript. Reply with JSON only: {\"summary\": str, \"decisions\": [str], "
                             "\"action_items\": [{\"text\": str, \"owner\": str|null, \"due\": \"YYYY-MM-DD\"|null}]}",
                   "messages": [{"role": "user", "content": transcript[:60000]}]},
@@ -208,7 +210,12 @@ def llm_recap(transcript: str, timeout: float = 20.0) -> Optional[dict]:
 
 def apply_recap(recap: MeetingRecap, base_date: Optional[dt.date] = None) -> None:
     text = get_transcript(recap)
-    data = llm_recap(text) or generate_recap(text, base_date)
+    from sqlalchemy.orm import object_session
+
+    from app.services.ai_key import effective_key
+
+    key = effective_key(object_session(recap), recap.workspace_id)
+    data = llm_recap(text, api_key=key) or generate_recap(text, base_date)
     recap.summary = data.get("summary")
     recap.decisions_json = list(data.get("decisions") or [])
     recap.action_items_json = list(data.get("action_items") or [])

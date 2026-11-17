@@ -252,9 +252,12 @@ def parse_request(text: str, today: dt.date, contacts: list, event_types: list) 
 
 
 # ---------------------------------------------------------------- optional LLM extraction
-def llm_extract(text: str, today: dt.date, timeout: float = 8.0) -> Optional[dict]:
+def llm_extract(text: str, today: dt.date, timeout: float = 8.0, api_key: Optional[str] = None) -> Optional[dict]:
     """Ask Claude to extract the same fields. Returns None when not configured or on any error."""
-    if not settings.anthropic_api_key:
+    from app.services import ai_key
+
+    api_key = api_key if api_key is not None else settings.anthropic_api_key
+    if not api_key:
         return None
     try:
         import httpx
@@ -267,10 +270,9 @@ def llm_extract(text: str, today: dt.date, timeout: float = 8.0) -> Optional[dic
             f"calendar week. Today is {today.isoformat()} ({today.strftime('%A')}). Reply with JSON only."
         )
         r = httpx.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={"x-api-key": settings.anthropic_api_key, "anthropic-version": "2023-06-01",
-                     "content-type": "application/json"},
-            json={"model": "claude-sonnet-5-5", "max_tokens": 300, "system": system,
+            f"{ai_key.API_BASE}/messages",
+            headers=ai_key.headers(api_key),
+            json={"model": ai_key.MODEL, "max_tokens": 300, "system": system,
                   "messages": [{"role": "user", "content": text[:2000]}]},
             timeout=timeout,
         )
@@ -326,12 +328,18 @@ def user_event_types(db: Session, workspace_id: str, user_id: str) -> list:
     ))
 
 
+def _key(db: Session, workspace_id: str) -> str:
+    from app.services.ai_key import effective_key
+
+    return effective_key(db, workspace_id)
+
+
 def interpret(db: Session, user: User, workspace_id: str, text: str, today: Optional[dt.date] = None) -> dict:
     today = today or local_today(user.default_timezone)
     contacts = workspace_contacts(db, workspace_id)
     ets = user_event_types(db, workspace_id, user.id)
     parsed = parse_request(text, today, contacts, ets)
-    return merge_llm(parsed, llm_extract(text, today), contacts)
+    return merge_llm(parsed, llm_extract(text, today, api_key=_key(db, workspace_id)), contacts)
 
 
 def choose_event_type(db: Session, user: User, workspace_id: str, parsed: dict) -> Optional[EventType]:
@@ -678,7 +686,7 @@ def interpret_email(db: Session, user: User, workspace_id: str, thread: str, tod
     ets = user_event_types(db, workspace_id, user.id)
     text = f"{info['subject']}\n{info['body']}"
     parsed = parse_request(text, today, contacts, ets)
-    parsed = merge_llm(parsed, llm_extract(text, today), contacts)
+    parsed = merge_llm(parsed, llm_extract(text, today, api_key=_key(db, workspace_id)), contacts)
     parsed["intent"] = "schedule"  # an inbound meeting request is always a scheduling task
     req = info["requester"]
     if req.get("email"):

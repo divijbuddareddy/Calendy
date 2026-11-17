@@ -6,8 +6,23 @@
     <h1>AI scheduling assistant</h1>
     <p class="muted">Ask in plain English. The assistant only uses your availability and your workspace contacts, and nothing is sent or booked until you approve it.</p>
   </div>
-  <span class="badge {{ 'badge-success' if llm_enabled else '' }}">{{ 'Language model + rules' if llm_enabled else 'Rules-based parser' }}</span>
+  <span class="badge {{ 'badge-success' if llm_enabled else '' }}">{{ 'Claude + rules' if llm_enabled else 'Rules-based parser' }}</span>
 </div>
+{% if not llm_enabled %}
+<div class="card">
+  <h2>Turn on Claude AI</h2>
+  <p class="muted">Paste your Anthropic API key to use Claude for understanding requests and emails. Without it, the built-in rules-based parser is used. Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.</p>
+  {% if ctx.can('admin') %}
+  <form method="post" action="/app/settings/ai" autocomplete="off" class="row" style="gap:8px;flex-wrap:wrap">{{ csrf_input(request) }}
+    <input type="hidden" name="next" value="/app/assistant">
+    <input type="password" name="api_key" placeholder="sk-ant-…" aria-label="Anthropic API key" autocomplete="off" spellcheck="false" required style="flex:1;min-width:240px">
+    <button class="btn btn-primary">Save &amp; verify key</button>
+  </form>
+  {% else %}
+  <p class="muted" style="margin:0">Ask a workspace admin to add the key in Settings → AI.</p>
+  {% endif %}
+</div>
+{% endif %}
 
 <div class="card">
   <form method="post" action="/app/assistant">

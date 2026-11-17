@@ -3,10 +3,25 @@ import os
 from functools import lru_cache
 from typing import Optional
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):
+class BlankAsDefaultSettings(BaseSettings):
+    """`KEY=` (blank) in .env means "use the default" for non-string fields, instead of failing to
+    parse "" as a bool/int (e.g. `DEMO_MODE=` straight from .env.example)."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _blank_as_default(cls, data):
+        if isinstance(data, dict):
+            fields = cls.model_fields
+            data = {k: v for k, v in data.items()
+                    if not (v == "" and k.lower() in fields and fields[k.lower()].annotation is not str)}
+        return data
+
+
+class Settings(BlankAsDefaultSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "AAL Scheduler"
